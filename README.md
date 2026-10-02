@@ -1,6 +1,10 @@
 <div align="center">
   <p>
-    <img src="./assets/logo.svg" alt="antigravity-cli-switcher" height="80">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./assets/logo-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="./assets/logo-light.svg">
+      <img alt="antigravity-cli-switcher" src="./assets/logo-light.svg" height="80">
+    </picture>
   </p>
   <p>Active-standby account manager and quota failover switcher for Antigravity CLI on Linux</p>
   <p>
