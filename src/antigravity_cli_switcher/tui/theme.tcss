@@ -1,0 +1,206 @@
+/* Textual CSS theme for antigravity-cli-switcher (ACS) */
+
+Screen {
+    background: $surface;
+    color: $text;
+}
+
+HeaderBar {
+    dock: top;
+    height: 3;
+    background: $panel;
+    color: $text;
+    border-bottom: heavy $primary;
+    padding: 0 1;
+}
+
+#header-title {
+    text-style: bold;
+    color: $accent;
+}
+
+#header-stats {
+    color: $text-muted;
+}
+
+TabbedContent {
+    height: 1fr;
+}
+
+TabPane {
+    height: 1fr;
+    padding: 0 1;
+}
+
+AccountTable {
+    height: 1fr;
+    border: round $primary-muted;
+    background: $surface;
+    margin: 1 0 0 0;
+}
+
+AccountTable > .datatable--cursor {
+    background: $accent-muted;
+    color: $text;
+    text-style: bold;
+}
+
+DetailPanel {
+    height: 11;
+    border: round $primary;
+    background: $panel;
+    margin: 1 0 0 0;
+    padding: 0 1;
+}
+
+#detail-title {
+    text-style: bold;
+    color: $accent;
+    border-bottom: solid $primary-muted;
+    margin-bottom: 0;
+}
+
+#detail-grid {
+    layout: grid;
+    grid-size: 2;
+    grid-columns: 1fr 1fr;
+    height: 1fr;
+}
+
+.detail-row {
+    height: 1;
+    color: $text;
+}
+
+.detail-label {
+    text-style: bold;
+    color: $text-muted;
+    width: 14;
+}
+
+/* Tabs: Proxy, Hygiene, History */
+ProxyTab, HygieneTab, HistoryTab, LogsTab {
+    height: 1fr;
+}
+
+#proxy-summary, #hygiene-summary, #history-summary {
+    height: 3;
+    background: $panel;
+    border: round $primary-muted;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+#proxy-table, #hygiene-table, #history-table {
+    height: 1fr;
+    border: round $primary-muted;
+    background: $surface;
+    margin-top: 1;
+}
+
+#proxy-actions, #hygiene-actions {
+    height: 3;
+    align: right middle;
+    margin-top: 1;
+}
+
+#proxy-actions Button, #hygiene-actions Button {
+    margin-left: 1;
+}
+
+/* Tab: Logs */
+#logs-filter-bar {
+    height: 3;
+    align: left middle;
+    background: $panel;
+    border: round $primary-muted;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+#logs-filter-bar Button {
+    margin-right: 1;
+    min-width: 8;
+}
+
+#logs-filter-label {
+    text-style: bold;
+    color: $accent;
+    margin-right: 1;
+}
+
+#logs-path-info {
+    color: $text-muted;
+    margin-left: 2;
+}
+
+#logs-rich-log {
+    height: 1fr;
+    border: round $primary-muted;
+    background: $surface;
+    margin-top: 1;
+}
+
+#bottom-container {
+    dock: bottom;
+    height: auto;
+}
+
+Footer {
+    dock: none;
+    height: 1;
+    background: $panel;
+    color: $text;
+}
+
+StatusBar {
+    dock: none;
+    height: 1;
+    background: $panel;
+    color: $text-muted;
+    padding: 0 1;
+}
+
+#status-message {
+    color: $accent;
+    text-style: bold;
+}
+
+/* Modals */
+ModalScreen {
+    align: center middle;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.modal-dialog {
+    width: 60;
+    height: auto;
+    border: thick $primary;
+    background: $panel;
+    padding: 1 2;
+}
+
+.modal-title {
+    text-align: center;
+    text-style: bold;
+    color: $accent;
+    margin-bottom: 1;
+}
+
+.modal-buttons {
+    margin-top: 1;
+    align: right middle;
+    height: 3;
+}
+
+.modal-buttons Button {
+    margin-left: 1;
+}
+
+.error-label {
+    color: $error;
+    text-style: bold;
+    height: 1;
+    margin-top: 1;
+}
+

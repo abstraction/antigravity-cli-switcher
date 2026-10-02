@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "antigravity-cli-switcher"
+version = "0.1.0"
+description = "Active-standby account manager and failover switcher for Antigravity CLI"
+requires-python = ">=3.10"
+readme = "README.md"
+authors = [
+  { name = "abstraction" }
+]
+license = "MIT"
+dependencies = [
+    "pydantic>=2.13.5",
+    "textual>=8.2.8",
+    "textual-dev>=1.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/abstraction/antigravity-cli-switcher"
+Repository = "https://github.com/abstraction/antigravity-cli-switcher"
+Issues = "https://github.com/abstraction/antigravity-cli-switcher/issues"
+
+[project.scripts]
+antigravity-cli-switcher = "antigravity_cli_switcher.cli:main"
+acs = "antigravity_cli_switcher.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "strict"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "RUF"]
+ignore = ["E501"]
+
+[tool.mypy]
+files = ["src", "tests"]
+python_version = "3.10"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+

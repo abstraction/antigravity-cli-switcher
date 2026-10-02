@@ -1,0 +1,50 @@
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Testing, typing & linting
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Environment & secrets
+.env
+.env.*
+
+# IDEs & editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local state
+.agy-cli-manager/
+.antigravity-cli-switcher/
+.specstory/
+AGENTS.md
+notes.md
+playground/
+learning/
+
+# Logs
+*.log
+
+# Scratch scripts & temporary files
+patch_*.py
+scratch/
+tmp/
+*.bak
+.git_bak/
+
+# OS
+.DS_Store
+Thumbs.db
+
