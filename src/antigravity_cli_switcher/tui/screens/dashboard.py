@@ -15,6 +15,7 @@ from antigravity_cli_switcher.models import (
     StatusSnapshot,
 )
 from antigravity_cli_switcher.tui.messages import SnapshotUpdated, StatusMessage
+from antigravity_cli_switcher.tui.modals import HelpModal
 from antigravity_cli_switcher.tui.screens.dashboard_actions import DashboardActionsScreenBase
 from antigravity_cli_switcher.tui.widgets.account_table import AccountTable
 from antigravity_cli_switcher.tui.widgets.detail_panel import DetailPanel
@@ -55,23 +56,27 @@ class DashboardScreen(DashboardActionsScreenBase):
         Binding("enter", "activate", "Activate"),
         Binding("a", "activate", "Activate", show=False),
         Binding("l", "relogin", "Relogin"),
-        Binding("n", "new_login", "New"),
-        Binding("i", "import_profile", "Import"),
+        Binding("n", "new_login", "New", show=False),
+        Binding("i", "import_profile", "Import", show=False),
         Binding("r", "switch_next", "Next"),
-        Binding("e", "toggle_enabled", "Toggle"),
-        Binding("c", "clear_bad", "Clear"),
-        Binding("m", "mark_bad", "Flag"),
-        Binding("f2", "rename", "Rename"),
+        Binding("e", "toggle_enabled", "Toggle", show=False),
+        Binding("c", "clear_bad", "Clear", show=False),
+        Binding("m", "mark_bad", "Flag", show=False),
+        Binding("f2", "rename", "Rename", show=False),
         Binding("v", "rename", "Rename", show=False),
-        Binding("d", "delete", "Delete"),
+        Binding("d", "delete", "Delete", show=False),
         Binding("u", "refresh_usage", "Quota"),
-        Binding("w", "toggle_switch_mode", "Mode"),
-        Binding("s", "cycle_sort", "Sort"),
-        Binding("t", "refresh_data", "Refresh"),
+        Binding("w", "toggle_switch_mode", "Mode", show=False),
+        Binding("s", "cycle_sort", "Sort", show=False),
+        Binding("t", "refresh_data", "Refresh", show=False),
         Binding("f5", "refresh_data", "Refresh", show=False),
         Binding("T", "cycle_refresh", "Interval", show=False),
-        Binding("@", "edit_email", "Email"),
-        Binding("p", "edit_policy", "Policy"),
+        Binding("@", "edit_email", "Email", show=False),
+        Binding("p", "edit_policy", "Policy", show=False),
+        Binding("o", "toggle_detail", "Details"),
+        Binding("question_mark", "show_help", "Help"),
+        Binding("?", "show_help", "Help", show=False),
+        Binding("h", "show_help", "Help", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -87,8 +92,8 @@ class DashboardScreen(DashboardActionsScreenBase):
         self.initial_tab = initial_tab
         self.snapshot: StatusSnapshot | None = None
         self.verification: SnapshotVerification | None = None
-        self.sort_mode: str = "name"
-        self._sort_modes = ["name", "state", "health", "usage-low", "usage-high"]
+        self.sort_mode: str = "usage-low"
+        self._sort_modes = ["usage-low", "usage-high", "name", "state", "health"]
         self._sort_idx = 0
         self._accounts_dirty: bool = False
         self._hygiene_dirty: bool = True
@@ -117,6 +122,8 @@ class DashboardScreen(DashboardActionsScreenBase):
     def on_mount(self) -> None:
         if self.initial_tab == "tab-accounts":
             self.query_one("#account-table", AccountTable).focus()
+        if 0 < self.size.height < 24:
+            self.query_one("#detail-panel", DetailPanel).add_class("collapsed")
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         """Focus active tab widget and apply pending dirty updates."""
@@ -234,6 +241,14 @@ class DashboardScreen(DashboardActionsScreenBase):
         cur = tabs.active or "tab-accounts"
         idx = self.TAB_IDS.index(cur) if cur in self.TAB_IDS else 0
         tabs.active = self.TAB_IDS[(idx + 1) % len(self.TAB_IDS)]
+
+    def action_toggle_detail(self) -> None:
+        """Toggle visibility of the detail overview panel."""
+        self.query_one("#detail-panel", DetailPanel).toggle_class("collapsed")
+
+    def action_show_help(self) -> None:
+        """Display keyboard shortcuts help dialog."""
+        self.app.push_screen(HelpModal())
 
     def on_status_message(self, message: StatusMessage) -> None:
         """Display status message in status bar."""

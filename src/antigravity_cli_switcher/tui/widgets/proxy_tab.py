@@ -54,13 +54,13 @@ class ProxyTab(Widget):
 
     def on_mount(self) -> None:
         table = self.query_one("#proxy-table", DataTable)
-        table.add_column("Sel", key="sel", width=4)
-        table.add_column("Account", key="account", width=22)
-        table.add_column("State", key="state", width=10)
-        table.add_column("Proxy", key="proxy_status", width=8)
-        table.add_column("Label", key="label", width=20)
-        table.add_column("URL", key="url", width=36)
-        table.add_column("Latency", key="latency", width=18)
+        table.add_column("Sel", key="sel", width=3)
+        table.add_column("Account", key="account", width=16)
+        table.add_column("State", key="state", width=8)
+        table.add_column("Proxy", key="proxy_status", width=7)
+        table.add_column("Label", key="label", width=12)
+        table.add_column("URL", key="url", width=22)
+        table.add_column("Latency", key="latency", width=10)
 
     @property
     def acs_app(self) -> ACSApp:

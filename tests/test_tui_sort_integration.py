@@ -119,33 +119,34 @@ async def test_dashboard_cycle_sort_through_usage_modes(
         header = screen.query_one(HeaderBar)
         table = screen.query_one(AccountTable)
 
-        # Initial sort mode is "name"
-        assert screen.sort_mode == "name"
-        assert header.sort_mode == "name"
-
-        # 1st press 's' -> "state"
-        await pilot.press("s")
-        assert screen.sort_mode == "state"
-        assert header.sort_mode == "state"
-
-        # 2nd press 's' -> "health"
-        await pilot.press("s")
-        assert screen.sort_mode == "health"
-        assert header.sort_mode == "health"
-
-        # 3rd press 's' -> "usage-low"
-        await pilot.press("s")
+        # Initial sort mode is "usage-low"
         assert screen.sort_mode == "usage-low"
         assert header.sort_mode == "usage-low"
         assert table.account_order == ["alpha", "beta"]
 
-        # 4th press 's' -> "usage-high"
+        # 1st press 's' -> "usage-high"
         await pilot.press("s")
         assert screen.sort_mode == "usage-high"
         assert header.sort_mode == "usage-high"
         assert table.account_order == ["beta", "alpha"]
 
-        # 5th press 's' -> cycles back to "name"
+        # 2nd press 's' -> "name"
         await pilot.press("s")
         assert screen.sort_mode == "name"
         assert header.sort_mode == "name"
+
+        # 3rd press 's' -> "state"
+        await pilot.press("s")
+        assert screen.sort_mode == "state"
+        assert header.sort_mode == "state"
+
+        # 4th press 's' -> "health"
+        await pilot.press("s")
+        assert screen.sort_mode == "health"
+        assert header.sort_mode == "health"
+
+        # 5th press 's' -> cycles back to "usage-low"
+        await pilot.press("s")
+        assert screen.sort_mode == "usage-low"
+        assert header.sort_mode == "usage-low"
+        assert table.account_order == ["alpha", "beta"]

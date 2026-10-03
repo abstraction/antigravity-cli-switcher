@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Final
 
 from rich.text import Text
+from textual import events
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
@@ -29,6 +31,52 @@ from antigravity_cli_switcher.tui.theme import (
 )
 from antigravity_cli_switcher.tui.usage_scoring import usage_sort_key
 
+COLUMN_CONFIG: Final[dict[str, tuple[str, int]]] = {
+    "sel": ("Sel", 3),
+    "name": ("Account", 16),
+    "state": ("State", 8),
+    "plan": ("Plan", 6),
+    "health": ("Health", 6),
+    "gemini": ("Gemini (S/W)", 12),
+    "claude": ("Claude (S/W)", 12),
+    "reset": ("Reset (S/W)", 16),
+    "next": ("Next", 8),
+    "error": ("Last Error", 14),
+}
+
+ALL_COL_KEYS: Final[list[str]] = [
+    "sel",
+    "name",
+    "state",
+    "plan",
+    "health",
+    "gemini",
+    "claude",
+    "reset",
+    "next",
+    "error",
+]
+
+COMPACT_COL_KEYS: Final[list[str]] = [
+    "sel",
+    "name",
+    "state",
+    "plan",
+    "health",
+    "gemini",
+    "claude",
+    "next",
+]
+
+MOBILE_COL_KEYS: Final[list[str]] = [
+    "sel",
+    "name",
+    "state",
+    "health",
+    "gemini",
+    "next",
+]
+
 
 class AccountTable(DataTable[Text | str]):
     """Responsive DataTable for managing Antigravity accounts."""
@@ -50,18 +98,37 @@ class AccountTable(DataTable[Text | str]):
             disabled=disabled,
         )
         self.account_order: list[str] = []
+        self._current_col_keys: list[str] = []
+        self._last_snapshot: StatusSnapshot | None = None
+        self._last_verification: SnapshotVerification | None = None
+        self._last_sort_mode: str = "usage-low"
+
+    def _get_column_keys_for_width(self, width: int) -> list[str]:
+        if 0 < width < 75:
+            return MOBILE_COL_KEYS
+        if 75 <= width < 105:
+            return COMPACT_COL_KEYS
+        return ALL_COL_KEYS
+
+    def _setup_columns(self, col_keys: list[str]) -> None:
+        self.clear(columns=True)
+        for key in col_keys:
+            label, width = COLUMN_CONFIG[key]
+            self.add_column(label, key=key, width=width)
+        self._current_col_keys = list(col_keys)
 
     def on_mount(self) -> None:
-        self.add_column("Sel", key="sel", width=4)
-        self.add_column("Account", key="name", width=22)
-        self.add_column("State", key="state", width=10)
-        self.add_column("Plan", key="plan", width=8)
-        self.add_column("Health", key="health", width=8)
-        self.add_column("Gemini (S/W)", key="gemini", width=14)
-        self.add_column("Claude (S/W)", key="claude", width=14)
-        self.add_column("Reset (S/W)", key="reset", width=18)
-        self.add_column("Next", key="next", width=8)
-        self.add_column("Last Error", key="error", width=22)
+        target_keys = self._get_column_keys_for_width(self.size.width)
+        self._setup_columns(target_keys)
+
+    def on_resize(self, event: events.Resize) -> None:
+        target_keys = self._get_column_keys_for_width(event.size.width)
+        if (
+            target_keys != self._current_col_keys
+            and self._last_snapshot is not None
+            and self._last_verification is not None
+        ):
+            self.update_accounts(self._last_snapshot, self._last_verification, self._last_sort_mode)
 
     def get_selected_account_name(self) -> str | None:
         """Return the name of the currently selected/highlighted account."""
@@ -124,7 +191,7 @@ class AccountTable(DataTable[Text | str]):
         self,
         snapshot: StatusSnapshot,
         verification: SnapshotVerification,
-        sort_mode: str = "name",
+        sort_mode: str = "usage-low",
     ) -> None:
         """Update table rows from snapshot and verification data."""
         now = datetime.now(timezone.utc)
@@ -165,16 +232,24 @@ class AccountTable(DataTable[Text | str]):
             )
 
         new_account_order = [name for name, _ in items]
-        cols = ("sel", "name", "state", "plan", "health", "gemini", "claude", "reset", "next", "error")
+        target_keys = self._get_column_keys_for_width(self.size.width)
 
-        # In-place cell update if account order and count match existing rows
-        if self.account_order == new_account_order and self.row_count == len(new_account_order):
+        # In-place cell update if account order, count, and column layout match
+        if (
+            self._current_col_keys == target_keys
+            and self.account_order == new_account_order
+            and self.row_count == len(new_account_order)
+        ):
             for name, meta in items:
                 ver = verification.accounts.get(name)
                 vals = self._row_values(name, meta, ver, active_name, now)
-                for col_key, val in zip(cols, vals, strict=True):
-                    self.update_cell(name, col_key, val, update_width=False)
+                val_dict = dict(zip(ALL_COL_KEYS, vals, strict=True))
+                for col_key in self._current_col_keys:
+                    self.update_cell(name, col_key, val_dict[col_key], update_width=False)
             return
+
+        if self._current_col_keys != target_keys:
+            self._setup_columns(target_keys)
 
         saved_account = self.get_selected_account_name()
         self.clear()
@@ -187,7 +262,9 @@ class AccountTable(DataTable[Text | str]):
 
             ver = verification.accounts.get(name)
             vals = self._row_values(name, meta, ver, active_name, now)
-            self.add_row(*vals, key=name)
+            val_dict = dict(zip(ALL_COL_KEYS, vals, strict=True))
+            row_cells = [val_dict[k] for k in self._current_col_keys]
+            self.add_row(*row_cells, key=name)
 
         if self.row_count > 0:
             self.cursor_coordinate = Coordinate(new_cursor_row, 0)

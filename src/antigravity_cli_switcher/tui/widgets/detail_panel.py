@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
@@ -20,9 +21,26 @@ from antigravity_cli_switcher.tui.formatters import (
 class DetailPanel(Widget):
     """Panel displaying status of the selected account."""
 
+    def __init__(
+        self,
+        *,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+        disabled: bool = False,
+    ) -> None:
+        super().__init__(name=name, id=id, classes=classes, disabled=disabled)
+        self._last_name: str | None = None
+        self._last_meta: AccountMeta | None = None
+        self._last_ver: AccountVerification | None = None
+
     def compose(self) -> ComposeResult:
         yield Static("Overview", id="detail-title")
         yield Static(id="detail-content")
+
+    def on_resize(self, event: events.Resize) -> None:
+        if self._last_name and self._last_meta:
+            self.update_detail(self._last_name, self._last_meta, self._last_ver)
 
     def update_detail(
         self,
@@ -31,6 +49,10 @@ class DetailPanel(Widget):
         verification: AccountVerification | None,
     ) -> None:
         """Update the panel contents for the given account."""
+        self._last_name = name
+        self._last_meta = meta
+        self._last_ver = verification
+
         title_static = self.query_one("#detail-title", Static)
         content_static = self.query_one("#detail-content", Static)
 
@@ -61,7 +83,6 @@ class DetailPanel(Widget):
         title_text.append(str(meta.health_status), style=health_style)
         title_static.update(title_text)
 
-        # 2-column key-value text presentation
         gemini_5h = format_window_summary(meta, "short", now, "gemini")
         gemini_wk = format_window_summary(meta, "weekly", now, "gemini")
         other_5h = format_window_summary(meta, "short", now, "other")
@@ -70,31 +91,51 @@ class DetailPanel(Widget):
         mode_str = f"{meta.status} │ {'enabled' if meta.enabled else 'disabled'}"
         status_str = str(meta.health_status.value if hasattr(meta.health_status, "value") else meta.health_status)
 
-        lines = [
-            ("Token Email", tok_email, "Gemini 5h", gemini_5h),
-            ("Exp. Email", exp_email, "Gemini Wk", gemini_wk),
-            ("Plan", meta.plan_type or "unknown", "Other 5h", other_5h),
-            ("Mode", mode_str, "Other Wk", other_wk),
-            ("Next Refresh", next_ref, "Problem", prob_str),
-            ("Failures", str(meta.fail_count), "Status", status_str),
-        ]
-
         text = Text()
-        for k1, v1, k2, v2 in lines:
-            text.append(f"{k1:<13}: ", style="dim bold")
-            text.append(f"{v1:<28} ", style="white")
-            text.append(f"│ {k2:<10}: ", style="dim bold")
-            text.append(f"{v2}\n", style="white")
+        width = self.size.width
+
+        if 0 < width < 75:
+            # Single-column compact presentation for narrow screens
+            compact_lines = [
+                ("Token", tok_email),
+                ("Expected", exp_email),
+                ("Plan", meta.plan_type or "unknown"),
+                ("Mode", mode_str),
+                ("Gemini 5h", gemini_5h),
+                ("Gemini Wk", gemini_wk),
+                ("Other 5h", other_5h),
+                ("Next Ref", next_ref),
+                ("Problem", prob_str),
+                ("Status", f"{status_str} (fails: {meta.fail_count})"),
+            ]
+            for k, v in compact_lines:
+                text.append(f"{k:<10}: ", style="dim bold")
+                text.append(f"{v}\n", style="white")
+        else:
+            # 2-column key-value presentation tightened to 71 cols
+            lines = [
+                ("Token Email", tok_email, "Gemini 5h", gemini_5h),
+                ("Exp. Email", exp_email, "Gemini Wk", gemini_wk),
+                ("Plan", meta.plan_type or "unknown", "Other 5h", other_5h),
+                ("Mode", mode_str, "Other Wk", other_wk),
+                ("Next Refresh", next_ref, "Problem", prob_str),
+                ("Failures", str(meta.fail_count), "Status", status_str),
+            ]
+            for k1, v1, k2, v2 in lines:
+                text.append(f"{k1:<12}: ", style="dim bold")
+                text.append(f"{v1:<20} ", style="white")
+                text.append(f"│ {k2:<10}: ", style="dim bold")
+                text.append(f"{v2}\n", style="white")
 
         if summary and summary != "Ready for use.":
-            text.append("Note         : ", style="bold yellow")
+            text.append("Note      : ", style="bold yellow")
             text.append(f"{summary}\n", style="yellow")
 
         if rec == "human_intervention":
-            text.append("Action       : ", style="bold red")
+            text.append("Action    : ", style="bold red")
             text.append("Requires human intervention. Verify in browser or switch account.\n", style="bold red")
         elif rec == "relogin":
-            text.append("Action       : ", style="bold magenta")
+            text.append("Action    : ", style="bold magenta")
             text.append("Press 'l' to relogin / fix this account.\n", style="bold magenta")
 
         content_static.update(text)

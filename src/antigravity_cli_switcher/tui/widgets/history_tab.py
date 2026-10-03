@@ -42,14 +42,14 @@ class HistoryTab(Widget):
 
     def on_mount(self) -> None:
         table = self.query_one("#history-table", DataTable)
-        table.add_column("#", key="idx", width=4)
-        table.add_column("Timestamp", key="timestamp", width=22)
-        table.add_column("From", key="from_acc", width=18)
-        table.add_column("To", key="to_acc", width=18)
-        table.add_column("Outcome", key="outcome", width=12)
-        table.add_column("Trigger", key="trigger", width=18)
-        table.add_column("Reason", key="reason", width=36)
-        table.add_column("Details", key="req_id", width=20)
+        table.add_column("#", key="idx", width=3)
+        table.add_column("Timestamp", key="timestamp", width=19)
+        table.add_column("From", key="from_acc", width=12)
+        table.add_column("To", key="to_acc", width=12)
+        table.add_column("Outcome", key="outcome", width=9)
+        table.add_column("Trigger", key="trigger", width=10)
+        table.add_column("Reason", key="reason", width=18)
+        table.add_column("Details", key="req_id", width=12)
 
     @property
     def acs_app(self) -> ACSApp:

@@ -7,10 +7,10 @@ Screen {
 
 HeaderBar {
     dock: top;
-    height: 3;
+    height: 2;
     background: $panel;
     color: $text;
-    border-bottom: heavy $primary;
+    border-bottom: solid $primary;
     padding: 0 1;
 }
 
@@ -36,7 +36,7 @@ AccountTable {
     height: 1fr;
     border: round $primary-muted;
     background: $surface;
-    margin: 1 0 0 0;
+    margin: 0;
 }
 
 AccountTable > .datatable--cursor {
@@ -46,11 +46,17 @@ AccountTable > .datatable--cursor {
 }
 
 DetailPanel {
-    height: 11;
+    height: auto;
+    max-height: 10;
+    min-height: 3;
     border: round $primary;
     background: $panel;
-    margin: 1 0 0 0;
+    margin: 0;
     padding: 0 1;
+}
+
+DetailPanel.collapsed {
+    display: none;
 }
 
 #detail-title {
@@ -174,7 +180,20 @@ ModalScreen {
 
 .modal-dialog {
     width: 60;
+    max-width: 95%;
     height: auto;
+    overflow-y: auto;
+    border: thick $primary;
+    background: $panel;
+    padding: 1 2;
+}
+
+.help-modal-dialog {
+    width: 74;
+    max-width: 95%;
+    max-height: 90%;
+    height: auto;
+    overflow-y: auto;
     border: thick $primary;
     background: $panel;
     padding: 1 2;

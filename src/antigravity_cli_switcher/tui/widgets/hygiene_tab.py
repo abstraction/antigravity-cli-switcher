@@ -49,14 +49,14 @@ class HygieneTab(Widget):
 
     def on_mount(self) -> None:
         table = self.query_one("#hygiene-table", DataTable)
-        table.add_column("Account", key="account", width=22)
-        table.add_column("Status", key="status", width=14)
-        table.add_column("Action", key="action", width=14)
-        table.add_column("Expected Email", key="expected_email", width=24)
-        table.add_column("Token Email", key="token_email", width=24)
-        table.add_column("Synthetic", key="synthetic", width=12)
-        table.add_column("Expired", key="expired", width=10)
-        table.add_column("Summary", key="summary", width=40)
+        table.add_column("Account", key="account", width=16)
+        table.add_column("Status", key="status", width=10)
+        table.add_column("Action", key="action", width=10)
+        table.add_column("Expected Email", key="expected_email", width=18)
+        table.add_column("Token Email", key="token_email", width=18)
+        table.add_column("Synthetic", key="synthetic", width=8)
+        table.add_column("Expired", key="expired", width=8)
+        table.add_column("Summary", key="summary", width=24)
 
     @property
     def acs_app(self) -> ACSApp:

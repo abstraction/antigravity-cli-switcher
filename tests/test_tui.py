@@ -170,8 +170,9 @@ async def test_dashboard_screen_pilot(temp_paths: ManagerPaths, monkeypatch: pyt
         assert tabs.active == "tab-accounts"
 
         # Test sort cycle binding 's'
+        assert screen.sort_mode == "usage-low"
         await pilot.press("s")
-        assert screen.sort_mode == "state"
+        assert screen.sort_mode == "usage-high"
 
         # Test manual refresh data binding 't'
         await pilot.press("t")

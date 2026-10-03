@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -16,7 +17,7 @@ class HeaderBar(Widget):
     account_count: reactive[int] = reactive(0)
     refresh_interval: reactive[int] = reactive(5)
     switch_mode: reactive[str] = reactive("manual")
-    sort_mode: reactive[str] = reactive("name")
+    sort_mode: reactive[str] = reactive("usage-low")
 
     def compose(self) -> ComposeResult:
         yield Static(id="header-content")
@@ -36,6 +37,9 @@ class HeaderBar(Widget):
     def watch_sort_mode(self, value: str) -> None:
         self._refresh_content()
 
+    def on_resize(self, event: events.Resize) -> None:
+        self._refresh_content()
+
     def _refresh_content(self) -> None:
         try:
             content_static = self.query_one("#header-content", Static)
@@ -44,22 +48,41 @@ class HeaderBar(Widget):
 
         text = Text()
         text.append(" ACS ", style="bold black on green")
-        text.append(" Active: ", style="bold")
-        if self.active_account:
-            text.append(f"{self.active_account} ", style="bold green")
+
+        active_label = self.active_account or "none"
+        active_style = "bold green" if self.active_account else "bold red"
+        mode_style = "bold magenta" if self.switch_mode == "auto" else "yellow"
+        width = self.size.width
+
+        if 0 < width < 55:
+            # Ultra-compact mode for very narrow mobile screens
+            text.append(f" {active_label} ", style=active_style)
+            text.append("│ ", style="dim")
+            text.append(f"{self.account_count} ", style="bold cyan")
+            text.append("│ ", style="dim")
+            text.append(self.switch_mode, style=mode_style)
+        elif 55 <= width < 80:
+            # Compact mode for 80-column terminals
+            text.append(f" {active_label} ", style=active_style)
+            text.append("│ ", style="dim")
+            text.append(f"{self.account_count} accs ", style="bold cyan")
+            text.append("│ ", style="dim")
+            text.append(f"{self.switch_mode} ", style=mode_style)
+            text.append("│ ", style="dim")
+            text.append(f"{self.refresh_interval}s ", style="cyan")
+            text.append("│ ", style="dim")
+            text.append(self.sort_mode, style="blue")
         else:
-            text.append("none ", style="bold red")
-
-        text.append("│ Accounts: ", style="dim")
-        text.append(f"{self.account_count} ", style="bold cyan")
-
-        text.append("│ Mode: ", style="dim")
-        text.append(f"{self.switch_mode} ", style="bold magenta" if self.switch_mode == "auto" else "yellow")
-
-        text.append("│ Interval: ", style="dim")
-        text.append(f"{self.refresh_interval}s ", style="cyan")
-
-        text.append("│ Sort: ", style="dim")
-        text.append(f"{self.sort_mode}", style="blue")
+            # Full verbose format
+            text.append(" Active: ", style="bold")
+            text.append(f"{active_label} ", style=active_style)
+            text.append("│ Accounts: ", style="dim")
+            text.append(f"{self.account_count} ", style="bold cyan")
+            text.append("│ Mode: ", style="dim")
+            text.append(f"{self.switch_mode} ", style=mode_style)
+            text.append("│ Interval: ", style="dim")
+            text.append(f"{self.refresh_interval}s ", style="cyan")
+            text.append("│ Sort: ", style="dim")
+            text.append(self.sort_mode, style="blue")
 
         content_static.update(text)
