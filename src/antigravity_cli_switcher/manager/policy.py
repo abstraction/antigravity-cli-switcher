@@ -5,7 +5,7 @@ from antigravity_cli_switcher.manager.paths import ManagerPaths
 
 DEFAULT_SWITCH_MODE = "auto"
 VALID_SWITCH_MODES = ("auto", "manual")
-DEFAULT_QUOTA_BACKEND = "native"
+DEFAULT_QUOTA_BACKEND = "http"
 VALID_QUOTA_BACKENDS = ("native", "http", "auto")
 DEFAULT_REFRESH_FAILURE_SWITCH_THRESHOLD = 2
 DEFAULT_SHORT_SWITCH_THRESHOLD_PERCENT = 10.0

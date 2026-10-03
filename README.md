@@ -244,18 +244,22 @@ Candidate selection strategies:
 
 ## Quota refresh operations
 
-`acs` defaults to native quota querying via `agy -p "/usage"` wrapped in an isolated OS keyring warmup. This eliminates WAF 403 blocks caused by TLS JA3 fingerprint mismatches. You can configure or override the polling backend at any time (`native`, `http`, or `auto` with HTTP fallback):
+`acs` supports three quota polling backends: `http` (default), `native`, and `auto`.
+
+* **`http` (default)**: Direct HTTPS requests to CloudCode API (`daily-cloudcode-pa.googleapis.com`). Executes in ~0.4s. Does not send hardware identifiers (`canonical_device_id`, DMI product names) or telemetry to Google Clearcut (`play.googleapis.com`). Avoids OS keyring flapping for accounts with cached tokens.
+* **`native`**: Executes `agy -p "/usage" --output-format json` wrapped in `_isolated_keyring_warmup`. Uses the official Go binary TLS fingerprint, but takes ~6.7s per invocation and transmits machine telemetry.
+* **`auto`**: Attempts `native` first and automatically falls back to `http` if the CLI command fails or returns zero quota buckets.
 
 ```bash
-# View current quota polling backend (native by default)
+# View current quota polling backend (http by default)
 acs quota-backend
 
-# Set quota polling backend globally (native / http / auto)
-acs quota-backend native
+# Set quota polling backend globally (http / native / auto)
+acs quota-backend http
 
 # Refresh quota for a specific account (using default or explicit backend)
 acs refresh-usage work
-acs refresh-usage work --backend http
+acs refresh-usage work --backend native
 
 # Refresh quota for the account next due according to policy
 acs refresh-due

@@ -256,24 +256,24 @@ def test_cli_quota_backend_get_and_set(mock_root: Path, capsys: pytest.CaptureFi
     code = main(["--root", str(mock_root), "quota-backend"])
     assert code == 0
     out, _ = capsys.readouterr()
-    assert out.strip() == "native"
+    assert out.strip() == "http"
 
     # 2. Get default backend via JSON
     code = main(["--root", str(mock_root), "quota-backend", "--json"])
     assert code == 0
     out, _ = capsys.readouterr()
-    assert json.loads(out) == {"quota_backend": "native"}
+    assert json.loads(out) == {"quota_backend": "http"}
 
-    # 3. Set to http
-    code = main(["--root", str(mock_root), "quota-backend", "http"])
+    # 3. Set to native
+    code = main(["--root", str(mock_root), "quota-backend", "native"])
     assert code == 0
     out, _ = capsys.readouterr()
-    assert "quota-backend: http" in out
+    assert "quota-backend: native" in out
 
     # Verify state updated
     paths = build_paths(mock_root)
     state = load_state(paths)
-    assert state["quota_backend"] == "http"
+    assert state["quota_backend"] == "native"
 
     # 4. Set to auto via JSON
     code = main(["--root", str(mock_root), "quota-backend", "auto", "--json"])

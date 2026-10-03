@@ -217,17 +217,17 @@ class TestQuotaBackendPolicy(unittest.TestCase):
         self.paths = m.build_paths(self.base / "manager")
         m.ensure_layout(self.paths)
 
-    def test_default_quota_backend_is_native(self) -> None:
+    def test_default_quota_backend_is_http(self) -> None:
         state = m.load_state(self.paths)
-        self.assertEqual(get_quota_backend(state), "native")
-        self.assertEqual(DEFAULT_QUOTA_BACKEND, "native")
+        self.assertEqual(get_quota_backend(state), "http")
+        self.assertEqual(DEFAULT_QUOTA_BACKEND, "http")
         self.assertEqual(VALID_QUOTA_BACKENDS, ("native", "http", "auto"))
 
     def test_set_quota_backend_persists_in_state(self) -> None:
-        set_quota_backend(self.paths, "http")
+        set_quota_backend(self.paths, "native")
         state = m.load_state(self.paths)
-        self.assertEqual(get_quota_backend(state), "http")
-        self.assertEqual(state["quota_backend"], "http")
+        self.assertEqual(get_quota_backend(state), "native")
+        self.assertEqual(state["quota_backend"], "native")
 
         set_quota_backend(self.paths, "auto")
         state = m.load_state(self.paths)
@@ -269,31 +269,7 @@ class TestRefreshAccountUsageBackends(unittest.TestCase):
         }
         m.save_state(self.paths, state)
 
-    def test_refresh_account_usage_native_default(self) -> None:
-        with (
-            mock.patch(
-                "antigravity_cli_switcher.manager.quota._fetch_native_quota",
-                return_value=SAMPLE_NATIVE_AGY_USAGE,
-            ) as mock_fetch,
-            mock.patch(
-                "antigravity_cli_switcher.manager.quota.check_token_account_match",
-                return_value=mock.Mock(status="ok"),
-            ),
-        ):
-            res = refresh_account_usage(self.paths, self.account_name)
-            self.assertEqual(res.backend, "native")
-            self.assertEqual(res.short_usage_value, 78.5)
-            self.assertEqual(res.weekly_usage_value, 64.39)
-            self.assertEqual(res.bucket_count, 4)
-            mock_fetch.assert_called_once()
-
-        state = m.load_state(self.paths)
-        meta = state["accounts"][self.account_name]
-        self.assertEqual(meta["usage_families"]["gemini"]["short"]["value"], 78.5)
-        self.assertEqual(meta["health_status"], "ready")
-        self.assertIsNone(meta["last_live_check_error"])
-
-    def test_refresh_account_usage_explicit_http_backend(self) -> None:
+    def test_refresh_account_usage_default_is_http(self) -> None:
         load_resp = {"cloudaicompanionProject": "project-synth", "planType": "GEMINI_CODE_ASSIST"}
         summary_resp = {
             "groups": [
@@ -327,10 +303,41 @@ class TestRefreshAccountUsageBackends(unittest.TestCase):
                 return_value=mock.Mock(status="ok"),
             ),
         ):
-            res = refresh_account_usage(self.paths, self.account_name, backend="http")
+            res = refresh_account_usage(self.paths, self.account_name)
             self.assertEqual(res.backend, "http")
             self.assertEqual(res.short_usage_value, 50.0)
             self.assertEqual(mock_http.call_count, 2)
+
+        state = m.load_state(self.paths)
+        meta = state["accounts"][self.account_name]
+        self.assertEqual(meta["last_quota_backend"], "http")
+        self.assertEqual(meta["health_status"], "ready")
+        self.assertIsNone(meta["last_live_check_error"])
+
+    def test_refresh_account_usage_explicit_native_backend(self) -> None:
+        with (
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota._fetch_native_quota",
+                return_value=SAMPLE_NATIVE_AGY_USAGE,
+            ) as mock_fetch,
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota.check_token_account_match",
+                return_value=mock.Mock(status="ok"),
+            ),
+        ):
+            res = refresh_account_usage(self.paths, self.account_name, backend="native")
+            self.assertEqual(res.backend, "native")
+            self.assertEqual(res.short_usage_value, 78.5)
+            self.assertEqual(res.weekly_usage_value, 64.39)
+            self.assertEqual(res.bucket_count, 4)
+            mock_fetch.assert_called_once()
+
+        state = m.load_state(self.paths)
+        meta = state["accounts"][self.account_name]
+        self.assertEqual(meta["last_quota_backend"], "native")
+        self.assertEqual(meta["usage_families"]["gemini"]["short"]["value"], 78.5)
+        self.assertEqual(meta["health_status"], "ready")
+        self.assertIsNone(meta["last_live_check_error"])
 
     def test_refresh_account_usage_auto_backend_fallback_on_native_error(self) -> None:
         load_resp = {"cloudaicompanionProject": "project-synth", "planType": "GEMINI_CODE_ASSIST"}

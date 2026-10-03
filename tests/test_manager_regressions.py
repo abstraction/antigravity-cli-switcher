@@ -167,7 +167,7 @@ class ManagerRegressionTests(unittest.TestCase):
             ),
             mock.patch.object(m.identity, "_best_effort_live_identity", return_value=None),
         ):
-            result = m.refresh_account_usage(self.paths)
+            result = m.refresh_account_usage(self.paths, backend="native")
         self.assertEqual(result.account, "a")
         self.assertEqual(result.backend, "native")
         self.assertEqual(self.token(m.account_dir(self.paths, "a")).read_text(encoding="utf-8"), payload)

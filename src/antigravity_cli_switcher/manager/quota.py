@@ -258,6 +258,7 @@ def _apply_usage_refresh_success(
         else:
             meta["next_live_check_at"] = None
         meta["usage_families"] = usage_families
+        meta["last_quota_backend"] = backend
         _sync_legacy_usage_fields(meta)
         if userinfo:
             identity = _identity_from_payload(userinfo)
