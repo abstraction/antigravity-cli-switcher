@@ -8,6 +8,7 @@ import subprocess
 import urllib.request
 from collections.abc import Mapping
 
+from antigravity_cli_switcher.manager.paths import resolve_agy_binary
 from antigravity_cli_switcher.manager.state import (
     USAGE_FAMILY_NAMES,
     _default_usage_families,
@@ -22,13 +23,15 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
 def _get_dynamic_user_agent() -> str:
+    version = "1.2.16"
     try:
-        result = subprocess.run(["agy", "--version"], capture_output=True, text=True, timeout=1.0)
-        version = result.stdout.strip()
-        if not version:
-            version = "1.2.1"
+        binary = resolve_agy_binary(None)
+        result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=1.0)
+        resolved_version = result.stdout.strip()
+        if resolved_version:
+            version = resolved_version
     except Exception:
-        version = "1.2.1"
+        pass
 
     os_name = "darwin" if platform.system().lower() == "darwin" else "linux"
     arch = "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
@@ -71,6 +74,7 @@ def _cloudcode_request(access_token: str, path: str, payload: dict) -> dict:
             "Authorization": "Bearer " + access_token,
             "Content-Type": "application/json",
             "User-Agent": CODE_ASSIST_USER_AGENT,
+            "Accept": "application/json",
         },
         method="POST",
     )
