@@ -149,6 +149,27 @@ def _candidate_usage_value(meta: dict, window_name: str, *, family: str = "gemin
     return _coerce_usage_value(window.get("value"))
 
 
+_FAR_FUTURE_SECONDS: int = 86400 * 365
+
+
+def _window_reset_seconds(
+    meta: dict,
+    window_name: str,
+    *,
+    family: str = "gemini",
+    now: datetime,
+) -> int:
+    """Seconds until a specific usage window resets. Returns far-future if unknown."""
+    windows = _usage_windows_for_family(meta, family)
+    window = windows.get(window_name, {})
+    if not isinstance(window, dict):
+        return _FAR_FUTURE_SECONDS
+    reset_at = parse_timestamp(window.get("reset_at"))
+    if reset_at is None or reset_at <= now:
+        return _FAR_FUTURE_SECONDS
+    return max(0, int((reset_at - now).total_seconds()))
+
+
 def _candidate_health_priority(health: HealthStatus) -> int:
     order = {
         HealthStatus.HEALTHY: 0,
@@ -246,6 +267,46 @@ def _best_switch_candidate(
                 _candidate_health_priority(health),
                 0 if short_known and not quota_low else 1,
                 str(meta_dict.get("created_at") or ""),
+                name.lower(),
+            )
+        elif strategy == "squeeze":
+            short_val = short_value if short_value is not None else 0.0
+            weekly_val = weekly_value if weekly_value is not None else 0.0
+            bottleneck = (
+                min(short_val, weekly_val)
+                if short_known and weekly_known
+                else (short_val if short_known else weekly_val)
+            )
+
+            short_reset_secs = _window_reset_seconds(meta_dict, "short", family=family or "gemini", now=current)
+            weekly_reset_secs = _window_reset_seconds(meta_dict, "weekly", family=family or "gemini", now=current)
+            nearest_reset = min(short_reset_secs, weekly_reset_secs)
+
+            ww_deadline = float(str(policy.get("weekly_waste_deadline_hours", 48.0))) * 3600
+            ww_threshold = float(str(policy.get("weekly_waste_threshold_percent", 70.0)))
+
+            is_imminent = nearest_reset <= 7200
+            is_weekly_waste = not quota_low and weekly_reset_secs <= ww_deadline and weekly_val >= ww_threshold
+
+            if is_imminent:
+                urgency = 0
+                primary = float(nearest_reset)
+                secondary = bottleneck
+            elif is_weekly_waste:
+                urgency = 1
+                primary = float(weekly_reset_secs)
+                secondary = -weekly_val
+            else:
+                urgency = 2
+                primary = bottleneck
+                secondary = float(nearest_reset)
+
+            score = (
+                _candidate_health_priority(health),
+                0 if short_known else 1,
+                urgency,
+                primary,
+                secondary,
                 name.lower(),
             )
         else:

@@ -174,15 +174,15 @@ def test_account_table_column_keys_for_widths() -> None:
 
     # Mobile width (< 75)
     assert table._get_column_keys_for_width(60) == MOBILE_COL_KEYS
-    assert len(MOBILE_COL_KEYS) == 6
+    assert len(MOBILE_COL_KEYS) == 7
 
     # Compact width (75 - 104)
     assert table._get_column_keys_for_width(80) == COMPACT_COL_KEYS
-    assert len(COMPACT_COL_KEYS) == 8
+    assert len(COMPACT_COL_KEYS) == 9
 
     # Full width (>= 105)
     assert table._get_column_keys_for_width(120) == ALL_COL_KEYS
-    assert len(ALL_COL_KEYS) == 10
+    assert len(ALL_COL_KEYS) == 11
 
     # Unmeasured / default (0)
     assert table._get_column_keys_for_width(0) == ALL_COL_KEYS

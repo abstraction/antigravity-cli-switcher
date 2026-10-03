@@ -21,6 +21,7 @@ class PolicyModal(ModalScreen[SwitchPolicyUpdate | None]):
     ]
 
     CANDIDATE_STRATEGIES: ClassVar[list[tuple[str, str]]] = [
+        ("Squeeze (drain lowest first)", "squeeze"),
         ("Balanced (headroom & load)", "balanced"),
         ("Highest Short Quota", "highest-short"),
         ("Round Robin", "round-robin"),
@@ -62,8 +63,8 @@ class PolicyModal(ModalScreen[SwitchPolicyUpdate | None]):
             )
 
             cand_val = self.current_policy.candidate_strategy
-            if cand_val not in ("balanced", "highest-short", "round-robin"):
-                cand_val = "balanced"
+            if cand_val not in ("balanced", "highest-short", "round-robin", "squeeze"):
+                cand_val = "squeeze"
             yield Label("Candidate strategy:")
             yield Select[str](
                 options=self.CANDIDATE_STRATEGIES,

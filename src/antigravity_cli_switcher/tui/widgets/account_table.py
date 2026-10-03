@@ -29,7 +29,10 @@ from antigravity_cli_switcher.tui.theme import (
     format_plan_badge,
     format_state,
 )
-from antigravity_cli_switcher.tui.usage_scoring import usage_sort_key
+from antigravity_cli_switcher.tui.usage_scoring import (
+    calculate_account_usage_score,
+    usage_sort_key,
+)
 
 COLUMN_CONFIG: Final[dict[str, tuple[str, int]]] = {
     "sel": ("Sel", 3),
@@ -37,6 +40,7 @@ COLUMN_CONFIG: Final[dict[str, tuple[str, int]]] = {
     "state": ("State", 8),
     "plan": ("Plan", 6),
     "health": ("Health", 6),
+    "eff": ("Eff %", 5),
     "gemini": ("Gemini (S/W)", 12),
     "claude": ("Claude (S/W)", 12),
     "reset": ("Reset (S/W)", 16),
@@ -50,6 +54,7 @@ ALL_COL_KEYS: Final[list[str]] = [
     "state",
     "plan",
     "health",
+    "eff",
     "gemini",
     "claude",
     "reset",
@@ -63,6 +68,7 @@ COMPACT_COL_KEYS: Final[list[str]] = [
     "state",
     "plan",
     "health",
+    "eff",
     "gemini",
     "claude",
     "next",
@@ -73,6 +79,7 @@ MOBILE_COL_KEYS: Final[list[str]] = [
     "name",
     "state",
     "health",
+    "eff",
     "gemini",
     "next",
 ]
@@ -143,7 +150,7 @@ class AccountTable(DataTable[Text | str]):
         ver: AccountVerification | None,
         active_name: str | None,
         now: datetime,
-    ) -> tuple[Text, Text, Text, Text, Text, Text, Text, Text, Text, Text]:
+    ) -> tuple[Text, Text, Text, Text, Text, Text, Text, Text, Text, Text, Text]:
         if ver is not None:
             prob_status = ver.problem_status.value
         elif meta.health_status == HealthStatus.INELIGIBLE or meta.stored_health_status == HealthStatus.INELIGIBLE:
@@ -162,12 +169,21 @@ class AccountTable(DataTable[Text | str]):
         health_badge = format_health_badge(prob_status)
 
         if not meta.enabled:
+            eff_str = Text("-", style="dim")
             gemini_str = Text("-", style="dim")
             claude_str = Text("-", style="dim")
             reset_str = Text("-", style="dim")
             next_str = Text("-", style="dim")
             err_str = Text("-", style="dim")
         else:
+            score = calculate_account_usage_score(meta, now)
+            if not score.has_known_quota:
+                eff_str = Text("-", style="dim")
+            else:
+                eff_val = score.effective_quota
+                eff_style = "bold green" if eff_val > 50 else ("bold yellow" if eff_val > 20 else "bold red")
+                eff_str = Text(f"{eff_val:.0f}%", style=eff_style)
+                
             gemini_str = Text(format_model_usage(meta, "gemini"))
             claude_str = Text(format_model_usage(meta, "claude"))
             reset_str = Text(format_countdown(meta, now), style="dim")
@@ -180,6 +196,7 @@ class AccountTable(DataTable[Text | str]):
             state_badge,
             plan_badge,
             health_badge,
+            eff_str,
             gemini_str,
             claude_str,
             reset_str,

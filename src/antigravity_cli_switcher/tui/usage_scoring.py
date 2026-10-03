@@ -18,6 +18,8 @@ __all__ = ["AccountUsageScore", "calculate_account_usage_score", "usage_sort_key
 
 FAR_FUTURE_RESET_SECONDS: int = 86400 * 365
 IMMINENT_RESET_THRESHOLD_SECONDS: int = 7200
+WEEKLY_WASTE_DEADLINE_SECONDS: int = 172800
+WEEKLY_WASTE_HEADROOM_THRESHOLD: float = 70.0
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,8 @@ class AccountUsageScore:
     short_effective: float
     weekly_effective: float
     nearest_reset_seconds: int
+    nearest_short_reset_seconds: int
+    nearest_weekly_reset_seconds: int
 
 
 def _resolve_window(meta: AccountMeta, family: str, window_name: str) -> UsageWindow | None:
@@ -97,7 +101,7 @@ def calculate_account_usage_score(meta: AccountMeta, now: datetime) -> AccountUs
     has_known_quota = len(known_effs) > 0
 
     if has_known_quota:
-        effective_quota = sum(known_effs) / len(known_effs)
+        effective_quota = min(known_effs)
         max_headroom = max(known_effs)
         min_headroom = min(known_effs)
     else:
@@ -115,21 +119,35 @@ def calculate_account_usage_score(meta: AccountMeta, now: datetime) -> AccountUs
     weekly_eff = sum(known_weeklies) / len(known_weeklies) if known_weeklies else 0.0
 
     # Reset deltas for urgency
-    reset_deltas: list[int] = []
-    for w in (g_short_w, g_weekly_w, c_short_w, c_weekly_w):
+    short_reset_deltas: list[int] = []
+    weekly_reset_deltas: list[int] = []
+
+    for w, is_weekly in [
+        (g_short_w, False),
+        (g_weekly_w, True),
+        (c_short_w, False),
+        (c_weekly_w, True),
+    ]:
         if w is not None and w.reset_at:
             dt = parse_iso_timestamp(w.reset_at)
             if dt is not None:
                 delta = max(0, int((dt - now).total_seconds()))
-                reset_deltas.append(delta)
+                if is_weekly:
+                    weekly_reset_deltas.append(delta)
+                else:
+                    short_reset_deltas.append(delta)
 
+    # Legacy top-level reset_at maps to short window
     if meta.reset_at:
         dt = parse_iso_timestamp(meta.reset_at)
         if dt is not None:
             delta = max(0, int((dt - now).total_seconds()))
-            reset_deltas.append(delta)
+            short_reset_deltas.append(delta)
 
-    nearest_reset = min(reset_deltas) if reset_deltas else FAR_FUTURE_RESET_SECONDS
+    all_resets = short_reset_deltas + weekly_reset_deltas
+    nearest_reset = min(all_resets) if all_resets else FAR_FUTURE_RESET_SECONDS
+    nearest_short = min(short_reset_deltas) if short_reset_deltas else FAR_FUTURE_RESET_SECONDS
+    nearest_weekly = min(weekly_reset_deltas) if weekly_reset_deltas else FAR_FUTURE_RESET_SECONDS
 
     return AccountUsageScore(
         has_known_quota=has_known_quota,
@@ -141,6 +159,8 @@ def calculate_account_usage_score(meta: AccountMeta, now: datetime) -> AccountUs
         short_effective=short_eff,
         weekly_effective=weekly_eff,
         nearest_reset_seconds=nearest_reset,
+        nearest_short_reset_seconds=nearest_short,
+        nearest_weekly_reset_seconds=nearest_weekly,
     )
 
 
@@ -215,16 +235,26 @@ def usage_sort_key(
         )
     else:
         # usage-low: lowest available headroom first (squeeze urgent quota before reset)
+        is_weekly_waste = (
+            not is_exhausted
+            and score.nearest_weekly_reset_seconds <= WEEKLY_WASTE_DEADLINE_SECONDS
+            and score.weekly_effective >= WEEKLY_WASTE_HEADROOM_THRESHOLD
+        )
+
         if is_exhausted:
-            imminent_rank = 1
+            urgency_rank = 3
             primary_metric = float(score.nearest_reset_seconds)
             secondary_metric = 0.0
         elif score.nearest_reset_seconds <= IMMINENT_RESET_THRESHOLD_SECONDS:
-            imminent_rank = 0
+            urgency_rank = 0
             primary_metric = float(score.nearest_reset_seconds)
             secondary_metric = score.effective_quota
+        elif is_weekly_waste:
+            urgency_rank = 1
+            primary_metric = float(score.nearest_weekly_reset_seconds)
+            secondary_metric = -score.weekly_effective
         else:
-            imminent_rank = 1
+            urgency_rank = 2
             primary_metric = score.effective_quota
             secondary_metric = float(score.nearest_reset_seconds)
 
@@ -234,7 +264,7 @@ def usage_sort_key(
             cooldown_rank,
             quota_known_rank,
             exhausted_rank,
-            imminent_rank,
+            urgency_rank,
             primary_metric,
             secondary_metric,
             score.max_headroom,

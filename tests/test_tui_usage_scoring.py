@@ -82,7 +82,7 @@ def test_usage_scoring_multi_family_combining() -> None:
         }
     )
     score_mixed = calculate_account_usage_score(meta_mixed, now)
-    assert score_mixed.effective_quota == 50.0
+    assert score_mixed.effective_quota == 0.0
     assert score_mixed.max_headroom == 100.0
     assert score_mixed.min_headroom == 0.0
 
