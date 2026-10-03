@@ -300,6 +300,15 @@ Deep binary reconnaissance of the official `antigravity` (`agy`) Go binary revea
 4. **Performance and Keyring Stability**:
    - `http` backend calls complete in ~0.4s per account, compared to ~6.7s for `native` subprocess execution.
    - `http` uses stored OAuth access tokens directly and refreshes them via Google token endpoints only when expired. For accounts with valid cached tokens, `http` requires zero D-Bus OS keyring operations, eliminating keyring flapping.
+   
+5. **Direct HTTP Token Refresh**:
+   - Token refresh via `agy models` was historically necessary to keep active sessions alive. However, running `agy models` leaks hardware telemetry just like `native` quota polling.
+   - The `http` backend now performs token refreshment entirely via direct `urllib` POSTs to `oauth2.googleapis.com/token` utilizing the embedded `1071006060591` native desktop client credentials, achieving a completely binary-free quota lifecycle.
+
+6. **Anti-Thundering Herd Global Governor**:
+   - Launching `acs` after a long idle period could traditionally spawn a "thundering herd" burst of quota requests from 20+ distinct standby accounts simultaneously.
+   - The system now features a global persistent pacing governor (`last_background_refresh_at` stored in `state.json`) that spaces out automated background due refreshes by at least 35 seconds across both CLI watch daemons and the TUI interface.
+   - Additionally, exhausted accounts employ **reset-aware sleeping**, halting 300s polling loops and strictly sleeping until their next quota window begins.
 
 | Metric / Dimension | `http` (Default) | `native` | `auto` |
 |---|---|---|---|

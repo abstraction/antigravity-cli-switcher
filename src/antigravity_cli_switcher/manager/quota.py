@@ -234,6 +234,12 @@ def _ensure_fresh_access_token(
             return _extract_access_token(source_home)
         except Exception:
             pass
+            
+    from antigravity_cli_switcher.log import get_logger
+    get_logger().warning(
+        f"HTTP token refresh failed for {source_home.parent.name}. Falling back to native agy models warmup. "
+        "Google OAuth desktop credentials may have rotated."
+    )
 
     try:
         with _isolated_keyring_warmup(source_home):
