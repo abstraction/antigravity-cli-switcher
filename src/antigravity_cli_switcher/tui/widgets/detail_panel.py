@@ -101,6 +101,7 @@ class DetailPanel(Widget):
                 ("Expected", exp_email),
                 ("Plan", meta.plan_type or "unknown"),
                 ("Mode", mode_str),
+                ("Backend", meta.last_quota_backend or "-"),
                 ("Gemini 5h", gemini_5h),
                 ("Gemini Wk", gemini_wk),
                 ("Other 5h", other_5h),
@@ -118,8 +119,8 @@ class DetailPanel(Widget):
                 ("Exp. Email", exp_email, "Gemini Wk", gemini_wk),
                 ("Plan", meta.plan_type or "unknown", "Other 5h", other_5h),
                 ("Mode", mode_str, "Other Wk", other_wk),
-                ("Next Refresh", next_ref, "Problem", prob_str),
-                ("Failures", str(meta.fail_count), "Status", status_str),
+                ("Next Refresh", next_ref, "Backend", meta.last_quota_backend or "-"),
+                ("Failures", str(meta.fail_count), "Problem", prob_str),
             ]
             for k1, v1, k2, v2 in lines:
                 text.append(f"{k1:<12}: ", style="dim bold")

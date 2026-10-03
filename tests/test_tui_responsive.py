@@ -228,5 +228,6 @@ async def test_detail_panel_compact_presentation() -> None:
         assert content_static.content is not None
         rendered = str(content_static.content)
         assert "Token" in rendered
+        assert "Backend" in rendered
         assert "Status" in rendered
         assert "Problem" in rendered
