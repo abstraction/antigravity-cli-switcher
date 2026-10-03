@@ -37,17 +37,17 @@ class DashboardScreen(DashboardActionsScreenBase):
 
     TAB_IDS: ClassVar[list[str]] = [
         "tab-accounts",
-        "tab-hygiene",
-        "tab-history",
         "tab-logs",
+        "tab-history",
+        "tab-hygiene",
         "tab-proxies",
     ]
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("1", "switch_tab('tab-accounts')", "Accounts", show=False),
-        Binding("2", "switch_tab('tab-hygiene')", "Hygiene", show=False),
+        Binding("2", "switch_tab('tab-logs')", "Logs", show=False),
         Binding("3", "switch_tab('tab-history')", "History", show=False),
-        Binding("4", "switch_tab('tab-logs')", "Logs", show=False),
+        Binding("4", "switch_tab('tab-hygiene')", "Hygiene", show=False),
         Binding("5", "switch_tab('tab-proxies')", "Proxies", show=False),
         Binding("left", "prev_tab", "Prev Tab", show=False, priority=True),
         Binding("right", "next_tab", "Next Tab", show=False, priority=True),
@@ -107,12 +107,12 @@ class DashboardScreen(DashboardActionsScreenBase):
             with TabPane("Accounts", id="tab-accounts"):
                 yield AccountTable(id="account-table")
                 yield DetailPanel(id="detail-panel")
-            with TabPane("Hygiene", id="tab-hygiene"):
-                yield HygieneTab(id="hygiene-tab")
-            with TabPane("History", id="tab-history"):
-                yield HistoryTab(id="history-tab")
             with TabPane("Logs", id="tab-logs"):
                 yield LogsTab(id="logs-tab")
+            with TabPane("History", id="tab-history"):
+                yield HistoryTab(id="history-tab")
+            with TabPane("Hygiene", id="tab-hygiene"):
+                yield HygieneTab(id="hygiene-tab")
             with TabPane("Proxies", id="tab-proxies"):
                 yield ProxyTab(id="proxy-tab")
         with Vertical(id="bottom-container"):
