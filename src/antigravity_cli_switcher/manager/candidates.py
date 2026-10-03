@@ -174,6 +174,7 @@ def _candidate_health_priority(health: HealthStatus) -> int:
     order = {
         HealthStatus.HEALTHY: 0,
         HealthStatus.READY: 1,
+        HealthStatus.OAUTH_ROTATED: 1,
         HealthStatus.STALE: 2,
         HealthStatus.TOKEN_STALE: 2,
         HealthStatus.QUOTA_STALE: 2,

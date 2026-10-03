@@ -53,6 +53,7 @@ from antigravity_cli_switcher.manager.state import (
     utc_now,
 )
 from antigravity_cli_switcher.manager.verification import is_ineligible_error
+from antigravity_cli_switcher.models import FreshToken, HealthStatus
 
 
 @dataclass
@@ -221,17 +222,17 @@ def _ensure_fresh_access_token(
     source_home: Path,
     agy_binary: str | None = None,
     timeout_seconds: int = 30,
-) -> str:
+) -> FreshToken:
     if not _token_expiry_due(source_home):
         try:
-            return _extract_access_token(source_home)
+            return FreshToken(_extract_access_token(source_home), fallback_used=False)
         except Exception:
             pass
 
     warmup_err: str | None = None
     if _refresh_token_http(source_home):
         try:
-            return _extract_access_token(source_home)
+            return FreshToken(_extract_access_token(source_home), fallback_used=False)
         except Exception:
             pass
 
@@ -251,13 +252,13 @@ def _ensure_fresh_access_token(
     try:
         token = _extract_access_token(source_home)
         if not _token_expiry_due(source_home):
-            return token
+            return FreshToken(token, fallback_used=True)
     except Exception:
         pass
 
     if warmup_err is not None:
         raise ValueError(warmup_err)
-    return _extract_access_token(source_home)
+    return FreshToken(_extract_access_token(source_home), fallback_used=True)
 
 
 def _resolve_quota_backend(state: dict[str, object], backend_arg: str | None) -> str:
@@ -276,6 +277,7 @@ def _apply_usage_refresh_success(
     bucket_count: int,
     userinfo: dict | None,
     backend: str,
+    fallback_used: bool = False,
 ) -> UsageRefreshResult:
     now_dt = utc_now()
     now_iso = now_dt.isoformat()
@@ -291,8 +293,18 @@ def _apply_usage_refresh_success(
         meta["last_live_check_at"] = now_iso
         meta["last_live_check_error"] = None
         meta["refresh_fail_count"] = 0
-        if meta.get("health_status") in {"refresh_failed", "ineligible", "stale", "quota_stale"}:
-            meta["health_status"] = "ready"
+
+        if fallback_used:
+            meta["health_status"] = HealthStatus.OAUTH_ROTATED.value
+        elif meta.get("health_status") in {
+            "refresh_failed",
+            "ineligible",
+            "stale",
+            "quota_stale",
+            HealthStatus.OAUTH_ROTATED.value,
+        }:
+            meta["health_status"] = HealthStatus.READY.value
+
         policy_seconds = int(meta.get("refresh_policy_seconds", 300) or 300)
         next_check = None
         if policy_seconds > 0:
@@ -403,6 +415,7 @@ def _refresh_http_quota(
     timeout_seconds: int = 30,
 ) -> UsageRefreshResult:
     access_token = _ensure_fresh_access_token(source_home, agy_binary=agy_binary, timeout_seconds=timeout_seconds)
+    fallback_used = bool(getattr(access_token, "fallback_used", False))
 
     load_response = _cloudcode_request(access_token, CODE_ASSIST_LOAD_PATH, {})
     ineligible_tiers = load_response.get("ineligibleTiers")
@@ -452,6 +465,7 @@ def _refresh_http_quota(
         bucket_count=bucket_count,
         userinfo=userinfo,
         backend="http",
+        fallback_used=fallback_used,
     )
 
 

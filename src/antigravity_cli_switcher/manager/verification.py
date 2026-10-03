@@ -75,6 +75,8 @@ def _derive_health_status(paths: ManagerPaths, name: str, meta: AccountMeta) -> 
         return HealthStatus.INELIGIBLE
     if isinstance(meta.last_live_check_error, str):
         return HealthStatus.REFRESH_FAILED
+    if meta.health_status == HealthStatus.OAUTH_ROTATED or meta.stored_health_status == HealthStatus.OAUTH_ROTATED:
+        return HealthStatus.OAUTH_ROTATED
     next_live_check_at = parse_timestamp(meta.next_live_check_at)
     if next_live_check_at and next_live_check_at <= utc_now():
         return HealthStatus.QUOTA_STALE
@@ -169,6 +171,18 @@ def verify_account(paths: ManagerPaths, name: str, meta: AccountMeta) -> Account
         problem_status = ProblemStatus.REFRESH_FAILED
         recommended_action = "refresh"
         summary = f"Last live check failed: {last_check_err}"
+    elif (
+        health_status == HealthStatus.OAUTH_ROTATED
+        or meta.health_status == HealthStatus.OAUTH_ROTATED
+        or meta.stored_health_status == HealthStatus.OAUTH_ROTATED
+    ):
+        problem_status = ProblemStatus.OAUTH_ROTATED
+        recommended_action = "update_credentials"
+        summary = (
+            "HTTP token refresh failed; native CLI warmup fallback was used. "
+            "Google OAuth desktop credentials may have rotated."
+        )
+        health_status = HealthStatus.OAUTH_ROTATED
     elif health_status == HealthStatus.TOKEN_STALE:
         problem_status = ProblemStatus.TOKEN_REFRESH_REQUIRED
         recommended_action = "refresh"

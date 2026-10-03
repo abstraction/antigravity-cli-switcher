@@ -10,7 +10,7 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
-from antigravity_cli_switcher.models import AccountMeta, AccountVerification
+from antigravity_cli_switcher.models import AccountMeta, AccountVerification, HealthStatus
 from antigravity_cli_switcher.tui.formatters import (
     format_next_refresh,
     format_problem_summary,
@@ -76,9 +76,17 @@ class DetailPanel(Widget):
         title_text.append(name, style="bold cyan")
         title_text.append(" │ Health: ", style="dim")
         health_style = (
-            "bold green"
-            if meta.health_status in ("healthy", "ok", "ready")
-            else ("bold red" if meta.health_status in ("ineligible", "auth_missing", "auth_expired") else "bold yellow")
+            "bold red reverse"
+            if meta.health_status == HealthStatus.OAUTH_ROTATED
+            else (
+                "bold green"
+                if meta.health_status in ("healthy", "ok", "ready")
+                else (
+                    "bold red"
+                    if meta.health_status in ("ineligible", "auth_missing", "auth_expired")
+                    else "bold yellow"
+                )
+            )
         )
         title_text.append(str(meta.health_status), style=health_style)
         title_static.update(title_text)

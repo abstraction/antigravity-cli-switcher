@@ -45,6 +45,8 @@ def format_health_badge(problem_status: str | None) -> Text:
         return Text("DISABL", style="dim")
     if problem_status in ("missing_auth", "auth_expired", "logged_out"):
         return Text("AUTH", style="bold red")
+    if problem_status == "oauth_rotated":
+        return Text("OAUTH_ROTATED", style="bold red reverse")
     if "mismatch" in problem_status or "duplicate" in problem_status:
         return Text("MISMAT", style="bold red")
     if problem_status in ("stale", "quota_check_due"):

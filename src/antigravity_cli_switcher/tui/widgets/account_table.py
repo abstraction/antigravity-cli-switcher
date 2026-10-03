@@ -155,6 +155,10 @@ class AccountTable(DataTable[Text | str]):
             prob_status = ver.problem_status.value
         elif meta.health_status == HealthStatus.INELIGIBLE or meta.stored_health_status == HealthStatus.INELIGIBLE:
             prob_status = ProblemStatus.INELIGIBLE.value
+        elif (
+            meta.health_status == HealthStatus.OAUTH_ROTATED or meta.stored_health_status == HealthStatus.OAUTH_ROTATED
+        ):
+            prob_status = ProblemStatus.OAUTH_ROTATED.value
         else:
             prob_status = "ok"
         state_str = "active" if name == active_name else ("disabled" if not meta.enabled else "standby")

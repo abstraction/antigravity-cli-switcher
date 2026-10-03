@@ -23,6 +23,7 @@ class HealthStatus(str, Enum):
     TOKEN_MISMATCH = "token_mismatch"
     TOKEN_DUPLICATE = "token_duplicate"
     SYNTHETIC_TOKEN = "synthetic_token"
+    OAUTH_ROTATED = "oauth_rotated"
     UNKNOWN = "unknown"
 
     def __str__(self) -> str:
@@ -43,9 +44,21 @@ class ProblemStatus(str, Enum):
     TOKEN_MISMATCH = "token_mismatch"
     TOKEN_DUPLICATE = "token_duplicate"
     SYNTHETIC_TOKEN = "synthetic_token"
+    OAUTH_ROTATED = "oauth_rotated"
 
     def __str__(self) -> str:
         return str(self.value)
+
+
+class FreshToken(str):
+    """Access token string subclass preserving OAuth fallback status."""
+
+    fallback_used: bool
+
+    def __new__(cls, value: str, *, fallback_used: bool = False) -> FreshToken:
+        obj = super().__new__(cls, value)
+        obj.fallback_used = fallback_used
+        return obj
 
 
 class AccountIdentity(BaseModel):
