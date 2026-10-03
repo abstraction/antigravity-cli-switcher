@@ -237,19 +237,37 @@ def _best_switch_candidate(
         if family is not None and _family_cooldown_active(meta_dict, family, current):
             continue
 
-        short_value = _candidate_usage_value(meta_dict, "short", family=family or "gemini")
-        weekly_value = _candidate_usage_value(meta_dict, "weekly", family=family or "gemini")
-        short_known = short_value is not None
-        quota_low = _is_family_quota_exhausted(
-            meta_dict,
-            current,
-            threshold_percent=threshold_percent,
-            family=family or "gemini",
-        )
-        weekly_known = weekly_value is not None
+        if family is None:
+            g_short = _candidate_usage_value(meta_dict, "short", family="gemini")
+            c_short = _candidate_usage_value(meta_dict, "short", family="claude")
+            g_weekly = _candidate_usage_value(meta_dict, "weekly", family="gemini")
+            c_weekly = _candidate_usage_value(meta_dict, "weekly", family="claude")
 
-        if family is not None and quota_low:
-            continue
+            known_shorts = [v for v in (g_short, c_short) if v is not None]
+            known_weeklies = [v for v in (g_weekly, c_weekly) if v is not None]
+
+            short_value = min(known_shorts) if known_shorts else None
+            weekly_value = min(known_weeklies) if known_weeklies else None
+            short_known = short_value is not None
+            weekly_known = weekly_value is not None
+
+            g_exhausted = _is_family_quota_exhausted(meta_dict, current, threshold_percent=threshold_percent, family="gemini")
+            c_exhausted = _is_family_quota_exhausted(meta_dict, current, threshold_percent=threshold_percent, family="claude")
+            quota_low = g_exhausted or c_exhausted
+        else:
+            short_value = _candidate_usage_value(meta_dict, "short", family=family)
+            weekly_value = _candidate_usage_value(meta_dict, "weekly", family=family)
+            short_known = short_value is not None
+            quota_low = _is_family_quota_exhausted(
+                meta_dict,
+                current,
+                threshold_percent=threshold_percent,
+                family=family,
+            )
+            weekly_known = weekly_value is not None
+
+            if quota_low:
+                continue
 
         score: tuple[object, ...]
         if strategy == "highest-short":
@@ -278,8 +296,17 @@ def _best_switch_candidate(
                 else (short_val if short_known else weekly_val)
             )
 
-            short_reset_secs = _window_reset_seconds(meta_dict, "short", family=family or "gemini", now=current)
-            weekly_reset_secs = _window_reset_seconds(meta_dict, "weekly", family=family or "gemini", now=current)
+            if family is None:
+                g_short_r = _window_reset_seconds(meta_dict, "short", family="gemini", now=current)
+                c_short_r = _window_reset_seconds(meta_dict, "short", family="claude", now=current)
+                short_reset_secs = min(g_short_r, c_short_r)
+                
+                g_weekly_r = _window_reset_seconds(meta_dict, "weekly", family="gemini", now=current)
+                c_weekly_r = _window_reset_seconds(meta_dict, "weekly", family="claude", now=current)
+                weekly_reset_secs = min(g_weekly_r, c_weekly_r)
+            else:
+                short_reset_secs = _window_reset_seconds(meta_dict, "short", family=family, now=current)
+                weekly_reset_secs = _window_reset_seconds(meta_dict, "weekly", family=family, now=current)
             nearest_reset = min(short_reset_secs, weekly_reset_secs)
 
             ww_deadline = float(str(policy.get("weekly_waste_deadline_hours", 48.0))) * 3600
