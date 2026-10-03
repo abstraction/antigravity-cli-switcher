@@ -14,7 +14,7 @@ def _fetch_native_quota(
     source_home: Path,
     agy_binary: str | None = None,
     timeout_seconds: int = 30,
-) -> dict:
+) -> dict[str, object]:
     resolved_binary = resolve_agy_binary(agy_binary)
     env = os.environ.copy()
     env["HOME"] = str(source_home)
@@ -48,13 +48,34 @@ def _fetch_native_quota(
         raw_stdout = proc.stdout.strip()
         if not raw_stdout:
             raise ValueError("agy /usage returned empty output.")
+
+        clean_json = raw_stdout
+        start = raw_stdout.find("{")
+        end = raw_stdout.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            clean_json = raw_stdout[start : end + 1]
+
         try:
-            payload = json.loads(raw_stdout)
+            payload = json.loads(clean_json)
             if not isinstance(payload, dict):
                 raise ValueError(f"Unexpected JSON output from agy /usage: {type(payload)}")
-            return payload
         except json.JSONDecodeError as exc:
             raise ValueError(f"Failed to parse agy /usage JSON: {exc} | output: {raw_stdout[:200]}") from exc
+
+        status = payload.get("status")
+        if status and str(status).upper() not in {"SUCCESS", "OK"}:
+            err_msg = str(payload.get("error") or payload.get("message") or f"status {status}")
+            if is_ineligible_error(err_msg):
+                raise ValueError(f"Eligibility check failed: {err_msg}")
+            raise ValueError(f"agy /usage failed: {err_msg}")
+
+        if payload.get("error"):
+            err_msg = str(payload.get("error"))
+            if is_ineligible_error(err_msg):
+                raise ValueError(f"Eligibility check failed: {err_msg}")
+            raise ValueError(f"agy /usage failed: {err_msg}")
+
+        return payload
 
 
 __all__ = [

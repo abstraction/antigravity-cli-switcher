@@ -6,6 +6,7 @@ import re
 import ssl
 import subprocess
 import urllib.request
+from collections.abc import Mapping
 
 from antigravity_cli_switcher.manager.state import (
     USAGE_FAMILY_NAMES,
@@ -141,7 +142,7 @@ def _parse_model_label(value: str) -> dict | None:
     }
 
 
-def _parse_summary_bucket(bucket: dict) -> dict:
+def _parse_summary_bucket(bucket: Mapping[str, object]) -> dict[str, object]:
     remaining = bucket.get("remaining_fraction")
     if remaining is None:
         remaining = bucket.get("remainingFraction")
@@ -156,31 +157,37 @@ def _parse_summary_bucket(bucket: dict) -> dict:
     }
 
 
-def _select_quota_summary_group(summary_response: dict) -> dict | None:
+def _extract_groups_from_summary(summary_response: Mapping[str, object]) -> list[dict[str, object]]:
     groups = summary_response.get("groups")
-    if not isinstance(groups, list):
-        cmd = summary_response.get("command")
-        if isinstance(cmd, dict):
-            cmd_data = cmd.get("data")
-            if isinstance(cmd_data, dict):
-                groups = cmd_data.get("groups")
-        if not isinstance(groups, list):
-            data_field = summary_response.get("data")
-            if isinstance(data_field, dict):
-                groups = data_field.get("groups")
-    if not isinstance(groups, list):
+    if isinstance(groups, list):
+        return [g for g in groups if isinstance(g, dict)]
+    cmd = summary_response.get("command")
+    if isinstance(cmd, dict):
+        cmd_data = cmd.get("data")
+        if isinstance(cmd_data, dict):
+            cmd_groups = cmd_data.get("groups")
+            if isinstance(cmd_groups, list):
+                return [g for g in cmd_groups if isinstance(g, dict)]
+    data_field = summary_response.get("data")
+    if isinstance(data_field, dict):
+        data_groups = data_field.get("groups")
+        if isinstance(data_groups, list):
+            return [g for g in data_groups if isinstance(g, dict)]
+    return []
+
+
+def _select_quota_summary_group(summary_response: Mapping[str, object]) -> dict[str, object] | None:
+    groups = _extract_groups_from_summary(summary_response)
+    if not groups:
         return None
-    normalized = [group for group in groups if isinstance(group, dict)]
-    if not normalized:
-        return None
-    for group in normalized:
+    for group in groups:
         display_name = group.get("displayName") or group.get("name")
         if isinstance(display_name, str) and "gemini" in display_name.lower():
             return group
-    return normalized[0]
+    return groups[0]
 
 
-def _quota_group_family(group: dict) -> str | None:
+def _quota_group_family(group: Mapping[str, object]) -> str | None:
     buckets = group.get("buckets")
     if isinstance(buckets, list):
         for bucket in buckets:
@@ -199,25 +206,15 @@ def _quota_group_family(group: dict) -> str | None:
     return None
 
 
-def _parse_quota_families_from_summary(summary_response: dict) -> tuple[dict, int]:
+def _parse_quota_families_from_summary(
+    summary_response: Mapping[str, object],
+) -> tuple[dict[str, dict[str, dict[str, object]]], int]:
     families = _default_usage_families()
-    groups = summary_response.get("groups")
-    if not isinstance(groups, list):
-        cmd = summary_response.get("command")
-        if isinstance(cmd, dict):
-            cmd_data = cmd.get("data")
-            if isinstance(cmd_data, dict):
-                groups = cmd_data.get("groups")
-        if not isinstance(groups, list):
-            data_field = summary_response.get("data")
-            if isinstance(data_field, dict):
-                groups = data_field.get("groups")
-    if not isinstance(groups, list):
+    groups = _extract_groups_from_summary(summary_response)
+    if not groups:
         return families, 0
     bucket_count = 0
     for group in groups:
-        if not isinstance(group, dict):
-            continue
         family = _quota_group_family(group)
         buckets = group.get("buckets")
         if family not in USAGE_FAMILY_NAMES or not isinstance(buckets, list):
@@ -227,14 +224,17 @@ def _parse_quota_families_from_summary(summary_response: dict) -> tuple[dict, in
                 continue
             bucket_count += 1
             window_name = bucket.get("window")
-            if window_name == "5h":
+            bucket_id = str(bucket.get("bucketId") or bucket.get("id") or "").lower()
+            if window_name == "5h" or (not window_name and "-5h" in bucket_id):
                 families[family]["short"] = _parse_summary_bucket(bucket)
-            elif window_name == "weekly":
+            elif window_name == "weekly" or (not window_name and "-weekly" in bucket_id):
                 families[family]["weekly"] = _parse_summary_bucket(bucket)
     return families, bucket_count
 
 
-def _parse_quota_windows_from_summary(summary_response: dict) -> tuple[dict, dict, int]:
+def _parse_quota_windows_from_summary(
+    summary_response: Mapping[str, object],
+) -> tuple[dict[str, object], dict[str, object], int]:
     families, bucket_count = _parse_quota_families_from_summary(summary_response)
     return families["gemini"]["short"], families["gemini"]["weekly"], bucket_count
 

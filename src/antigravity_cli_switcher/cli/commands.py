@@ -309,8 +309,13 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
             print(json.dumps(models_payload, indent=2, sort_keys=True))
         else:
             print(f"account: {models_payload['account']}")
-            for model in models_payload["models"]:
-                print(model["name"])
+            raw_models = models_payload.get("models")
+            model_list = raw_models if isinstance(raw_models, list) else []
+            for model in model_list:
+                if isinstance(model, dict):
+                    name_val = model.get("name")
+                    if name_val:
+                        print(name_val)
         return 0
     if cmd == "add":
         add_account(paths, args.name, args.source_dir)

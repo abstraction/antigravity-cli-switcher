@@ -20,7 +20,7 @@ def _run_agy_models_command(
     runtime_home: Path,
     agy_binary: str | None = None,
     timeout_seconds: int = 30,
-) -> list[dict]:
+) -> list[dict[str, object]]:
     resolved_binary = resolve_agy_binary(agy_binary)
     env = os.environ.copy()
     env["HOME"] = str(runtime_home)
@@ -38,7 +38,7 @@ def _run_agy_models_command(
     if proc.returncode != 0:
         tail = "\n".join(output.splitlines()[-8:]) if output else "no output"
         raise ValueError(f"agy models failed with exit code {proc.returncode}: {tail}")
-    models: list[dict] = []
+    models: list[dict[str, object]] = []
     for line in output.splitlines():
         parsed = _parse_model_label(line)
         if parsed:
@@ -53,7 +53,7 @@ def list_models(
     name: str | None = None,
     agy_binary: str | None = None,
     timeout_seconds: int = 30,
-) -> dict:
+) -> dict[str, object]:
     from antigravity_cli_switcher.manager.quota import (
         _ensure_fresh_access_token,
         _resolve_usage_refresh_target,
@@ -70,13 +70,13 @@ def list_models(
             f"but token belongs to {match_result.token_email}. Run 'acs login {account_name}' to fix."
         )
 
-    models: list[dict] = []
+    models: list[dict[str, object]] = []
     try:
         access_token = _ensure_fresh_access_token(source_home, agy_binary=agy_binary, timeout_seconds=timeout_seconds)
         load_response = _cloudcode_request(access_token, CODE_ASSIST_LOAD_PATH, {})
         raw_models = load_response.get("models")
         if isinstance(raw_models, list):
-            parsed_models: list[dict] = []
+            parsed_models: list[dict[str, object]] = []
             for item in raw_models:
                 if isinstance(item, str):
                     parsed = _parse_model_label(item)

@@ -165,6 +165,49 @@ class TestNativeQuotaExecution(unittest.TestCase):
                 _fetch_native_quota(self.base, agy_binary="agy", timeout_seconds=15)
             self.assertIn("Eligibility check failed", str(ctx.exception))
 
+    def test_fetch_native_quota_strips_stdout_noise(self) -> None:
+        mock_proc = mock.Mock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = (
+            "Checking CLI updates...\n" + json.dumps(SAMPLE_NATIVE_AGY_USAGE) + "\n[INFO] Session completed.\n"
+        )
+        mock_proc.stderr = ""
+
+        with (
+            mock.patch("subprocess.run", return_value=mock_proc),
+            mock.patch("antigravity_cli_switcher.manager.native_quota._isolated_keyring_warmup"),
+        ):
+            payload = _fetch_native_quota(self.base, agy_binary="agy", timeout_seconds=15)
+            self.assertEqual(payload["status"], "SUCCESS")
+
+    def test_fetch_native_quota_raises_on_error_status_in_json(self) -> None:
+        mock_proc = mock.Mock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = json.dumps({"status": "ERROR", "error": "Token expired or revoked"})
+        mock_proc.stderr = ""
+
+        with (
+            mock.patch("subprocess.run", return_value=mock_proc),
+            mock.patch("antigravity_cli_switcher.manager.native_quota._isolated_keyring_warmup"),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                _fetch_native_quota(self.base, agy_binary="agy", timeout_seconds=15)
+            self.assertIn("Token expired or revoked", str(ctx.exception))
+
+    def test_fetch_native_quota_raises_on_error_key_in_json(self) -> None:
+        mock_proc = mock.Mock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = json.dumps({"error": "Your current account is not eligible for Antigravity."})
+        mock_proc.stderr = ""
+
+        with (
+            mock.patch("subprocess.run", return_value=mock_proc),
+            mock.patch("antigravity_cli_switcher.manager.native_quota._isolated_keyring_warmup"),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                _fetch_native_quota(self.base, agy_binary="agy", timeout_seconds=15)
+            self.assertIn("Eligibility check failed", str(ctx.exception))
+
 
 class TestQuotaBackendPolicy(unittest.TestCase):
     def setUp(self) -> None:
@@ -352,6 +395,89 @@ class TestRefreshAccountUsageBackends(unittest.TestCase):
         state = m.load_state(self.paths)
         meta = state["accounts"][self.account_name]
         self.assertEqual(meta["health_status"], "ineligible")
+
+    def test_refresh_account_usage_native_raises_when_no_buckets(self) -> None:
+        empty_payload = {
+            "status": "SUCCESS",
+            "command": {"data": {"groups": []}},
+        }
+        with (
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota._fetch_native_quota",
+                return_value=empty_payload,
+            ),
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota.check_token_account_match",
+                return_value=mock.Mock(status="ok"),
+            ),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                refresh_account_usage(self.paths, self.account_name, backend="native")
+            self.assertIn("no quota buckets", str(ctx.exception))
+
+    def test_refresh_account_usage_auto_backend_falls_back_on_zero_buckets(self) -> None:
+        empty_payload = {
+            "status": "SUCCESS",
+            "command": {"data": {"groups": []}},
+        }
+        load_resp = {"cloudaicompanionProject": "project-synth", "planType": "GEMINI_CODE_ASSIST"}
+        summary_resp = {
+            "groups": [
+                {
+                    "displayName": "Gemini Models",
+                    "buckets": [
+                        {
+                            "bucketId": "gemini-5h",
+                            "window": "5h",
+                            "remainingFraction": 0.75,
+                            "resetTime": "2026-10-04T00:02:14Z",
+                        }
+                    ],
+                }
+            ]
+        }
+
+        def fake_http(token: str, path: str, payload: dict) -> dict:
+            if "loadCodeAssist" in path:
+                return load_resp
+            return summary_resp
+
+        with (
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota._fetch_native_quota",
+                return_value=empty_payload,
+            ),
+            mock.patch("antigravity_cli_switcher.manager.quota._cloudcode_request", side_effect=fake_http) as mock_http,
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota._ensure_fresh_access_token",
+                return_value="ya29.c.b0_synthetic_token",
+            ),
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota.check_token_account_match",
+                return_value=mock.Mock(status="ok"),
+            ),
+        ):
+            res = refresh_account_usage(self.paths, self.account_name, backend="auto")
+            self.assertEqual(res.backend, "http")
+            self.assertEqual(res.short_usage_value, 75.0)
+            self.assertEqual(mock_http.call_count, 2)
+
+    def test_refresh_account_usage_auto_backend_native_success(self) -> None:
+        with (
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota._fetch_native_quota",
+                return_value=SAMPLE_NATIVE_AGY_USAGE,
+            ),
+            mock.patch("antigravity_cli_switcher.manager.quota._cloudcode_request") as mock_http,
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota.check_token_account_match",
+                return_value=mock.Mock(status="ok"),
+            ),
+        ):
+            res = refresh_account_usage(self.paths, self.account_name, backend="auto")
+            self.assertEqual(res.backend, "native")
+            self.assertEqual(res.short_usage_value, 78.5)
+            mock_http.assert_not_called()
 
 
 if __name__ == "__main__":

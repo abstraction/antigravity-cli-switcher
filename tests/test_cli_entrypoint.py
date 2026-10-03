@@ -316,3 +316,74 @@ def test_cli_refresh_usage_with_backend_flag(mock_root: Path, monkeypatch: pytes
     assert code == 0
     assert called_kwargs["backend"] == "http"
     assert called_kwargs["account"] == "alpha"
+
+
+def test_cli_refresh_due_with_backend_flag(mock_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from antigravity_cli_switcher.manager.quota import UsageRefreshResult
+
+    called_kwargs: dict[str, object] = {}
+
+    def mock_refresh_due(paths, agy_binary=None, timeout_seconds=30, backend=None):
+        called_kwargs["backend"] = backend
+        return UsageRefreshResult(
+            account="alpha",
+            source_home=str(paths.root),
+            project_id=None,
+            plan_type="free",
+            prompt_credits_available=None,
+            prompt_credits_monthly=None,
+            short_usage_status="known",
+            short_usage_value=90.0,
+            short_reset_at=None,
+            weekly_usage_status="known",
+            weekly_usage_value=85.0,
+            weekly_reset_at=None,
+            usage_families={},
+            bucket_count=0,
+            backend=backend or "native",
+        )
+
+    monkeypatch.setattr("antigravity_cli_switcher.cli.refresh.refresh_due_account", mock_refresh_due)
+
+    code = main(["--root", str(mock_root), "refresh-due", "--backend", "http", "--json"])
+    assert code == 0
+    assert called_kwargs["backend"] == "http"
+
+
+def test_cli_refresh_all_with_backend_flag(mock_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from antigravity_cli_switcher.manager.paths import build_paths
+    from antigravity_cli_switcher.manager.quota import UsageRefreshResult
+    from antigravity_cli_switcher.manager.state import load_state, save_state
+
+    called_backends: list[str | None] = []
+
+    def mock_refresh(paths, name, agy_binary=None, timeout_seconds=30, backend=None):
+        called_backends.append(backend)
+        return UsageRefreshResult(
+            account=name,
+            source_home=str(paths.root),
+            project_id=None,
+            plan_type="free",
+            prompt_credits_available=None,
+            prompt_credits_monthly=None,
+            short_usage_status="known",
+            short_usage_value=90.0,
+            short_reset_at=None,
+            weekly_usage_status="known",
+            weekly_usage_value=85.0,
+            weekly_reset_at=None,
+            usage_families={},
+            bucket_count=0,
+            backend=backend or "native",
+        )
+
+    monkeypatch.setattr("antigravity_cli_switcher.cli.refresh.refresh_account_usage", mock_refresh)
+
+    paths = build_paths(mock_root)
+    state = load_state(paths)
+    state["accounts"]["test_account"] = {"enabled": True, "status": "standby"}
+    save_state(paths, state)
+
+    code = main(["--root", str(mock_root), "refresh-all", "--backend", "auto", "--json"])
+    assert code == 0
+    assert "auto" in called_backends

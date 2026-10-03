@@ -198,13 +198,9 @@ def _ensure_fresh_access_token(
     return _extract_access_token(source_home)
 
 
-def _resolve_quota_backend(state: dict, backend_arg: str | None) -> str:
+def _resolve_quota_backend(state: dict[str, object], backend_arg: str | None) -> str:
     if backend_arg is not None:
         return _normalize_quota_backend(backend_arg)
-    from unittest.mock import Base
-
-    if isinstance(_cloudcode_request, Base) or hasattr(_cloudcode_request, "assert_called"):
-        return "http"
     return get_quota_backend(state)
 
 
@@ -309,6 +305,8 @@ def _refresh_native_quota(
 ) -> UsageRefreshResult:
     payload = _fetch_native_quota(source_home, agy_binary=agy_binary, timeout_seconds=timeout_seconds)
     usage_families, bucket_count = _parse_quota_families_from_summary(payload)
+    if bucket_count == 0:
+        raise ValueError("agy /usage returned no quota buckets.")
     project_id = _extract_project_id({}, source_home)
     return _apply_usage_refresh_success(
         paths=paths,
@@ -355,7 +353,7 @@ def _refresh_http_quota(
     if bucket_count == 0:
         quota_response = _cloudcode_request(access_token, CODE_ASSIST_QUOTA_PATH, quota_request)
         remaining_raw = quota_response.get("remainingFraction")
-        short_window = {
+        short_window: dict[str, object] = {
             "status": "known" if isinstance(remaining_raw, (int, float)) else "unknown",
             "value": round(float(remaining_raw) * 100, 2) if isinstance(remaining_raw, (int, float)) else None,
             "reset_at": _normalize_timestamp(quota_response.get("resetTime")),

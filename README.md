@@ -8,7 +8,7 @@
   </p>
   <p>Active-standby account manager and quota failover switcher for Antigravity CLI on Linux</p>
   <p>
-    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-208%20passed-2ea043" alt="Tests"></a>
+    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-217%20passed-2ea043" alt="Tests"></a>
     <a href="https://github.com/abstraction/antigravity-cli-switcher"><img src="https://img.shields.io/badge/python-3.10+-3776ab" alt="Python"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   </p>
