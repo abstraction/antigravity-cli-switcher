@@ -108,6 +108,7 @@ class AccountMeta(BaseModel):
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     family_cooldowns: dict[str, str] = Field(default_factory=dict)
     expected_email: str | None = None
+    last_quota_backend: str = ""
 
 
 class AccountVerification(BaseModel):
@@ -209,12 +210,14 @@ class StatusSnapshot(BaseModel):
     lock_file: str
     live_dir: str | None = None
     active: str | None = None
+    quota_backend: str = "http"
     active_proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     switch_mode: str = "manual"
     switch_policy: SwitchPolicy = Field(default_factory=SwitchPolicy)
     switch_runtime: SwitchRuntime = Field(default_factory=SwitchRuntime)
     switch_history: list[SwitchHistoryEntry] = Field(default_factory=list)
     log_watch: LogWatchState = Field(default_factory=LogWatchState)
+    last_background_refresh_at: str | None = None
     accounts: dict[str, AccountMeta] = Field(default_factory=dict)
 
 

@@ -123,6 +123,11 @@ def build_parser() -> argparse.ArgumentParser:
     switch_mode = sub.add_parser("switch-mode", help="Get or set automatic failover mode (auto/manual)")
     switch_mode.add_argument("mode", nargs="?", choices=["auto", "manual"], help="New switch mode")
     switch_mode.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+    quota_backend_cmd = sub.add_parser("quota-backend", help="Get or set quota polling backend (native/http/auto)")
+    quota_backend_cmd.add_argument(
+        "backend", nargs="?", choices=["native", "http", "auto"], help="New quota backend (native/http/auto)"
+    )
+    quota_backend_cmd.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     switch_policy = sub.add_parser("switch-policy", help="Get or set auto-failover policy thresholds")
     switch_policy.add_argument(
         "--short-threshold",
@@ -193,10 +198,16 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_usage.add_argument("name", help="Account name to refresh")
     refresh_usage.add_argument("--agy-binary", default=None, help="Explicit agy binary path")
     refresh_usage.add_argument("--warmup-timeout-seconds", type=int, default=25, help="Task warmup timeout")
+    refresh_usage.add_argument(
+        "--backend", choices=["native", "http", "auto"], default=None, help="Quota polling backend (native/http/auto)"
+    )
     refresh_usage.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     refresh_due = sub.add_parser("refresh-due", help="Refresh usage for the next account due by policy")
     refresh_due.add_argument("--agy-binary", default=None, help="Explicit agy binary path")
     refresh_due.add_argument("--warmup-timeout-seconds", type=int, default=25, help="Task warmup timeout")
+    refresh_due.add_argument(
+        "--backend", choices=["native", "http", "auto"], default=None, help="Quota polling backend (native/http/auto)"
+    )
     refresh_due.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     refresh_all = sub.add_parser("refresh-all", help="Refresh usage metrics sequentially for all accounts")
     refresh_all.add_argument("--agy-binary", default=None, help="Explicit agy binary path")
@@ -207,6 +218,9 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_all.add_argument("--skip-disabled", action="store_true", help="Skip disabled accounts")
     refresh_all.add_argument(
         "--skip-exhausted", action="store_true", help="Skip accounts with 0% short window remaining"
+    )
+    refresh_all.add_argument(
+        "--backend", choices=["native", "http", "auto"], default=None, help="Quota polling backend (native/http/auto)"
     )
     refresh_all.add_argument("--json", action="store_true", help="Print machine-readable JSON summary")
     rotate_fail = sub.add_parser("rotate-after-failure", help="Record failure, mark cooldown, and switch to standby")

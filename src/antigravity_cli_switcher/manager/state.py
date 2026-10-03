@@ -17,6 +17,7 @@ from antigravity_cli_switcher.manager.paths import (
     ensure_layout,
 )
 from antigravity_cli_switcher.manager.policy import (
+    _normalize_quota_backend,
     _normalize_switch_mode,
     _normalize_switch_policy,
 )
@@ -257,6 +258,7 @@ def load_state(paths: ManagerPaths) -> dict:
     data.setdefault("active", None)
     data.setdefault("accounts", {})
     data.setdefault("live_dir", str(default_live_dir(paths.root)))
+    data["quota_backend"] = _normalize_quota_backend(data.get("quota_backend"))
     data["switch_mode"] = _normalize_switch_mode(data.get("switch_mode"))
     data["switch_policy"] = _normalize_switch_policy(data.get("switch_policy"))
     data["switch_runtime"] = _normalize_switch_runtime(data.get("switch_runtime"))

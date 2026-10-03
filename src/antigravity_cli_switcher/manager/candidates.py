@@ -251,8 +251,12 @@ def _best_switch_candidate(
             short_known = short_value is not None
             weekly_known = weekly_value is not None
 
-            g_exhausted = _is_family_quota_exhausted(meta_dict, current, threshold_percent=threshold_percent, family="gemini")
-            c_exhausted = _is_family_quota_exhausted(meta_dict, current, threshold_percent=threshold_percent, family="claude")
+            g_exhausted = _is_family_quota_exhausted(
+                meta_dict, current, threshold_percent=threshold_percent, family="gemini"
+            )
+            c_exhausted = _is_family_quota_exhausted(
+                meta_dict, current, threshold_percent=threshold_percent, family="claude"
+            )
             quota_low = g_exhausted or c_exhausted
         else:
             short_value = _candidate_usage_value(meta_dict, "short", family=family)
@@ -300,7 +304,7 @@ def _best_switch_candidate(
                 g_short_r = _window_reset_seconds(meta_dict, "short", family="gemini", now=current)
                 c_short_r = _window_reset_seconds(meta_dict, "short", family="claude", now=current)
                 short_reset_secs = min(g_short_r, c_short_r)
-                
+
                 g_weekly_r = _window_reset_seconds(meta_dict, "weekly", family="gemini", now=current)
                 c_weekly_r = _window_reset_seconds(meta_dict, "weekly", family="claude", now=current)
                 weekly_reset_secs = min(g_weekly_r, c_weekly_r)

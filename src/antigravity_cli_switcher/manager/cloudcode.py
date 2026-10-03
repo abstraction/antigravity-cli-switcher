@@ -6,7 +6,9 @@ import re
 import ssl
 import subprocess
 import urllib.request
+from collections.abc import Mapping
 
+from antigravity_cli_switcher.manager.paths import resolve_agy_binary
 from antigravity_cli_switcher.manager.state import (
     USAGE_FAMILY_NAMES,
     _default_usage_families,
@@ -21,13 +23,15 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
 def _get_dynamic_user_agent() -> str:
+    version = "1.2.16"
     try:
-        result = subprocess.run(["agy", "--version"], capture_output=True, text=True, timeout=1.0)
-        version = result.stdout.strip()
-        if not version:
-            version = "1.2.1"
+        binary = resolve_agy_binary(None)
+        result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=1.0)
+        resolved_version = result.stdout.strip()
+        if resolved_version:
+            version = resolved_version
     except Exception:
-        version = "1.2.1"
+        pass
 
     os_name = "darwin" if platform.system().lower() == "darwin" else "linux"
     arch = "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
@@ -70,6 +74,7 @@ def _cloudcode_request(access_token: str, path: str, payload: dict) -> dict:
             "Authorization": "Bearer " + access_token,
             "Content-Type": "application/json",
             "User-Agent": CODE_ASSIST_USER_AGENT,
+            "Accept": "application/json",
         },
         method="POST",
     )
@@ -141,9 +146,11 @@ def _parse_model_label(value: str) -> dict | None:
     }
 
 
-def _parse_summary_bucket(bucket: dict) -> dict:
-    remaining = bucket.get("remainingFraction")
-    reset_raw = bucket.get("resetTime")
+def _parse_summary_bucket(bucket: Mapping[str, object]) -> dict[str, object]:
+    remaining = bucket.get("remaining_fraction")
+    if remaining is None:
+        remaining = bucket.get("remainingFraction")
+    reset_raw = bucket.get("reset_time") or bucket.get("resetTime")
     reset_at = None
     if isinstance(reset_raw, str):
         reset_at = _normalize_timestamp(reset_raw.replace("Z", "+00:00"))
@@ -154,32 +161,48 @@ def _parse_summary_bucket(bucket: dict) -> dict:
     }
 
 
-def _select_quota_summary_group(summary_response: dict) -> dict | None:
+def _extract_groups_from_summary(summary_response: Mapping[str, object]) -> list[dict[str, object]]:
     groups = summary_response.get("groups")
-    if not isinstance(groups, list):
+    if isinstance(groups, list):
+        return [g for g in groups if isinstance(g, dict)]
+    cmd = summary_response.get("command")
+    if isinstance(cmd, dict):
+        cmd_data = cmd.get("data")
+        if isinstance(cmd_data, dict):
+            cmd_groups = cmd_data.get("groups")
+            if isinstance(cmd_groups, list):
+                return [g for g in cmd_groups if isinstance(g, dict)]
+    data_field = summary_response.get("data")
+    if isinstance(data_field, dict):
+        data_groups = data_field.get("groups")
+        if isinstance(data_groups, list):
+            return [g for g in data_groups if isinstance(g, dict)]
+    return []
+
+
+def _select_quota_summary_group(summary_response: Mapping[str, object]) -> dict[str, object] | None:
+    groups = _extract_groups_from_summary(summary_response)
+    if not groups:
         return None
-    normalized = [group for group in groups if isinstance(group, dict)]
-    if not normalized:
-        return None
-    for group in normalized:
-        display_name = group.get("displayName")
+    for group in groups:
+        display_name = group.get("displayName") or group.get("name")
         if isinstance(display_name, str) and "gemini" in display_name.lower():
             return group
-    return normalized[0]
+    return groups[0]
 
 
-def _quota_group_family(group: dict) -> str | None:
+def _quota_group_family(group: Mapping[str, object]) -> str | None:
     buckets = group.get("buckets")
     if isinstance(buckets, list):
         for bucket in buckets:
             if not isinstance(bucket, dict):
                 continue
-            bucket_id = str(bucket.get("bucketId") or "").lower()
+            bucket_id = str(bucket.get("bucketId") or bucket.get("id") or "").lower()
             if bucket_id.startswith("gemini-"):
                 return "gemini"
             if bucket_id.startswith("3p-"):
                 return "other"
-    label = " ".join(str(group.get(key) or "") for key in ("displayName", "description")).lower()
+    label = " ".join(str(group.get(key) or "") for key in ("displayName", "name", "description")).lower()
     if "gemini" in label:
         return "gemini"
     if "claude" in label or "gpt" in label:
@@ -187,15 +210,15 @@ def _quota_group_family(group: dict) -> str | None:
     return None
 
 
-def _parse_quota_families_from_summary(summary_response: dict) -> tuple[dict, int]:
+def _parse_quota_families_from_summary(
+    summary_response: Mapping[str, object],
+) -> tuple[dict[str, dict[str, dict[str, object]]], int]:
     families = _default_usage_families()
-    groups = summary_response.get("groups")
-    if not isinstance(groups, list):
+    groups = _extract_groups_from_summary(summary_response)
+    if not groups:
         return families, 0
     bucket_count = 0
     for group in groups:
-        if not isinstance(group, dict):
-            continue
         family = _quota_group_family(group)
         buckets = group.get("buckets")
         if family not in USAGE_FAMILY_NAMES or not isinstance(buckets, list):
@@ -205,14 +228,17 @@ def _parse_quota_families_from_summary(summary_response: dict) -> tuple[dict, in
                 continue
             bucket_count += 1
             window_name = bucket.get("window")
-            if window_name == "5h":
+            bucket_id = str(bucket.get("bucketId") or bucket.get("id") or "").lower()
+            if window_name == "5h" or (not window_name and "-5h" in bucket_id):
                 families[family]["short"] = _parse_summary_bucket(bucket)
-            elif window_name == "weekly":
+            elif window_name == "weekly" or (not window_name and "-weekly" in bucket_id):
                 families[family]["weekly"] = _parse_summary_bucket(bucket)
     return families, bucket_count
 
 
-def _parse_quota_windows_from_summary(summary_response: dict) -> tuple[dict, dict, int]:
+def _parse_quota_windows_from_summary(
+    summary_response: Mapping[str, object],
+) -> tuple[dict[str, object], dict[str, object], int]:
     families, bucket_count = _parse_quota_families_from_summary(summary_response)
     return families["gemini"]["short"], families["gemini"]["weekly"], bucket_count
 

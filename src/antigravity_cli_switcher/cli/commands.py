@@ -60,6 +60,7 @@ from antigravity_cli_switcher.manager import (
     set_enabled,
     set_expected_email,
     set_live_dir,
+    set_quota_backend,
     set_switch_mode,
     switch_account,
     switch_next,
@@ -251,6 +252,22 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
         else:
             print(f"switch-mode: {mode}")
         return 0
+    if cmd == "quota-backend":
+        snapshot = get_status_snapshot(paths)
+        if args.backend is None:
+            backend_payload = {"quota_backend": snapshot.get("quota_backend", "native")}
+            if args.json:
+                print(json.dumps(backend_payload, indent=2, sort_keys=True))
+            else:
+                print(backend_payload["quota_backend"])
+            return 0
+        backend = set_quota_backend(paths, args.backend)
+        backend_payload = {"quota_backend": backend}
+        if args.json:
+            print(json.dumps(backend_payload, indent=2, sort_keys=True))
+        else:
+            print(f"quota-backend: {backend}")
+        return 0
     if cmd == "switch-policy":
         snapshot = get_status_snapshot(paths)
         no_updates = (
@@ -292,8 +309,13 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
             print(json.dumps(models_payload, indent=2, sort_keys=True))
         else:
             print(f"account: {models_payload['account']}")
-            for model in models_payload["models"]:
-                print(model["name"])
+            raw_models = models_payload.get("models")
+            model_list = raw_models if isinstance(raw_models, list) else []
+            for model in model_list:
+                if isinstance(model, dict):
+                    name_val = model.get("name")
+                    if name_val:
+                        print(name_val)
         return 0
     if cmd == "add":
         add_account(paths, args.name, args.source_dir)

@@ -18,6 +18,7 @@ class HeaderBar(Widget):
     refresh_interval: reactive[int] = reactive(5)
     switch_mode: reactive[str] = reactive("manual")
     sort_mode: reactive[str] = reactive("usage-low")
+    quota_backend: reactive[str] = reactive("http")
 
     def compose(self) -> ComposeResult:
         yield Static(id="header-content")
@@ -37,6 +38,9 @@ class HeaderBar(Widget):
     def watch_sort_mode(self, value: str) -> None:
         self._refresh_content()
 
+    def watch_quota_backend(self, value: str) -> None:
+        self._refresh_content()
+
     def on_resize(self, event: events.Resize) -> None:
         self._refresh_content()
 
@@ -54,20 +58,22 @@ class HeaderBar(Widget):
         mode_style = "bold magenta" if self.switch_mode == "auto" else "yellow"
         width = self.size.width
 
+        backend_style = "bold cyan" if self.quota_backend == "http" else "bold yellow"
+
         if 0 < width < 55:
             # Ultra-compact mode for very narrow mobile screens
             text.append(f" {active_label} ", style=active_style)
             text.append("│ ", style="dim")
-            text.append(f"{self.account_count} ", style="bold cyan")
+            text.append(f"{self.quota_backend} ", style=backend_style)
             text.append("│ ", style="dim")
             text.append(self.switch_mode, style=mode_style)
-        elif 55 <= width < 80:
+        elif 55 <= width < 90:
             # Compact mode for 80-column terminals
             text.append(f" {active_label} ", style=active_style)
             text.append("│ ", style="dim")
-            text.append(f"{self.account_count} accs ", style="bold cyan")
-            text.append("│ ", style="dim")
             text.append(f"{self.switch_mode} ", style=mode_style)
+            text.append("│ ", style="dim")
+            text.append(f"{self.quota_backend} ", style=backend_style)
             text.append("│ ", style="dim")
             text.append(f"{self.refresh_interval}s ", style="cyan")
             text.append("│ ", style="dim")
@@ -80,6 +86,8 @@ class HeaderBar(Widget):
             text.append(f"{self.account_count} ", style="bold cyan")
             text.append("│ Mode: ", style="dim")
             text.append(f"{self.switch_mode} ", style=mode_style)
+            text.append("│ Quota: ", style="dim")
+            text.append(f"{self.quota_backend} ", style=backend_style)
             text.append("│ Interval: ", style="dim")
             text.append(f"{self.refresh_interval}s ", style="cyan")
             text.append("│ Sort: ", style="dim")

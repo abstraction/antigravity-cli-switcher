@@ -5,6 +5,8 @@ from antigravity_cli_switcher.manager.paths import ManagerPaths
 
 DEFAULT_SWITCH_MODE = "auto"
 VALID_SWITCH_MODES = ("auto", "manual")
+DEFAULT_QUOTA_BACKEND = "http"
+VALID_QUOTA_BACKENDS = ("native", "http", "auto")
 DEFAULT_REFRESH_FAILURE_SWITCH_THRESHOLD = 2
 DEFAULT_SHORT_SWITCH_THRESHOLD_PERCENT = 10.0
 DEFAULT_GEMINI_SWITCH_THRESHOLD_PERCENT = DEFAULT_SHORT_SWITCH_THRESHOLD_PERCENT
@@ -40,6 +42,33 @@ def set_switch_mode(paths: ManagerPaths, mode: str) -> str:
     with manager_lock(paths):
         state = sync_state_from_disk(paths, load_state(paths))
         state["switch_mode"] = normalized
+        save_state(paths, state)
+        return normalized
+
+
+def _normalize_quota_backend(value: object) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in VALID_QUOTA_BACKENDS:
+            return normalized
+    return DEFAULT_QUOTA_BACKEND
+
+
+def get_quota_backend(state: dict | None) -> str:
+    if not isinstance(state, dict):
+        return DEFAULT_QUOTA_BACKEND
+    return _normalize_quota_backend(state.get("quota_backend"))
+
+
+def set_quota_backend(paths: ManagerPaths, backend: str) -> str:
+    from antigravity_cli_switcher.manager.state import load_state, save_state, sync_state_from_disk
+
+    normalized = _normalize_quota_backend(backend)
+    if normalized != backend.strip().lower():
+        raise ValueError(f"Unsupported quota backend: {backend}. Must be one of: {', '.join(VALID_QUOTA_BACKENDS)}")
+    with manager_lock(paths):
+        state = sync_state_from_disk(paths, load_state(paths))
+        state["quota_backend"] = normalized
         save_state(paths, state)
         return normalized
 

@@ -77,6 +77,17 @@ def _account_due_for_refresh(meta: dict, now: datetime | None = None) -> bool:
     next_check = parse_timestamp(meta.get("next_live_check_at"))
     if next_check is not None:
         return next_check <= current
+
+    usage_windows = meta.get("usage_windows")
+    if isinstance(usage_windows, dict):
+        short = usage_windows.get("short")
+        if isinstance(short, dict):
+            short_val = short.get("value")
+            if isinstance(short_val, (int, float)) and short_val <= 0:
+                short_reset_at = parse_timestamp(short.get("reset_at"))
+                if short_reset_at and short_reset_at > current:
+                    return False
+
     policy = int(meta.get("refresh_policy_seconds", DEFAULT_REFRESH_POLICY_SECONDS) or DEFAULT_REFRESH_POLICY_SECONDS)
     if policy <= 0:
         return False
@@ -179,17 +190,38 @@ def pick_due_refresh_account(paths: ManagerPaths, exclude: set[str] | None = Non
     with manager_lock(paths):
         state = sync_state_from_disk(paths, load_state(paths))
         now = utc_now()
+
+        last_global_iso = state.get("last_background_refresh_at")
+        if last_global_iso:
+            try:
+                last_global = datetime.fromisoformat(last_global_iso)
+                if (now - last_global).total_seconds() < 35:
+                    return None
+            except ValueError:
+                pass
+
+        target: str | None = None
         active_name = state.get("active")
         if active_name and active_name not in exclude_set:
             active_meta = state["accounts"].get(active_name)
             if isinstance(active_meta, dict) and _account_due_for_refresh(active_meta, now):
-                return active_name
-        for name, meta in sorted(state["accounts"].items()):
-            if name == active_name or name in exclude_set:
-                continue
-            if _account_due_for_refresh(meta, now):
-                return name
-    return None
+                target = active_name
+
+        if not target:
+            for name, meta in sorted(state["accounts"].items()):
+                if name == active_name or name in exclude_set:
+                    continue
+                if _account_due_for_refresh(meta, now):
+                    target = name
+                    break
+
+        if target:
+            state["last_background_refresh_at"] = now.isoformat()
+            from antigravity_cli_switcher.manager.state import save_state
+
+            save_state(paths, state)
+
+        return target
 
 
 def ensure_active_account(
@@ -380,6 +412,7 @@ def refresh_due_account(
     paths: ManagerPaths,
     agy_binary: str | None = None,
     timeout_seconds: int = 30,
+    backend: str | None = None,
 ) -> UsageRefreshResult | None:
     from antigravity_cli_switcher.manager.quota import refresh_account_usage
 
@@ -391,4 +424,5 @@ def refresh_due_account(
         name=target,
         agy_binary=agy_binary,
         timeout_seconds=timeout_seconds,
+        backend=backend,
     )

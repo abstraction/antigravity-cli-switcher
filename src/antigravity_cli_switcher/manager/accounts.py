@@ -26,6 +26,7 @@ from antigravity_cli_switcher.manager.paths import (
 )
 from antigravity_cli_switcher.manager.policy import (
     _state_switch_policy,
+    get_quota_backend,
     get_switch_mode,
 )
 from antigravity_cli_switcher.manager.profiles import (
@@ -206,6 +207,7 @@ def get_status_snapshot(paths: ManagerPaths) -> dict:
         "lock_file": str(paths.lock_file),
         "live_dir": state.get("live_dir"),
         "active": active_name,
+        "quota_backend": get_quota_backend(state),
         "active_proxy": _normalize_proxy_config(active_meta.get("proxy"))
         if isinstance(active_meta, dict)
         else _default_proxy_config(),

@@ -123,8 +123,53 @@ class ManagerRegressionTests(unittest.TestCase):
             mock.patch.object(m.quota, "_cloudcode_request", side_effect=fake_cloudcode),
             mock.patch.object(m.identity, "_best_effort_live_identity", return_value=None),
         ):
-            result = m.refresh_account_usage(self.paths)
+            result = m.refresh_account_usage(self.paths, backend="http")
         self.assertEqual(result.account, "a")
+        self.assertEqual(self.token(m.account_dir(self.paths, "a")).read_text(encoding="utf-8"), payload)
+        self.assertEqual(self.token(self.live_home).read_text(encoding="utf-8"), "token-b")
+
+    def test_concurrent_refresh_preserves_switched_token_native(self) -> None:
+        self.add("a")
+        self.add("b")
+        payload = json.dumps({"token": {"access_token": "access-a"}})
+        self.token(self.live_home).write_text(payload, encoding="utf-8")
+        self.token(m.account_dir(self.paths, "a")).write_text(payload, encoding="utf-8")
+
+        def fake_fetch_native(
+            source_home: Path, agy_binary: str | None = None, timeout_seconds: int = 30
+        ) -> dict[str, object]:
+            m.switch_account(self.paths, "b")
+            return {
+                "status": "SUCCESS",
+                "command": {
+                    "data": {
+                        "groups": [
+                            {
+                                "name": "Gemini Models",
+                                "buckets": [
+                                    {
+                                        "id": "gemini-5h",
+                                        "window": "5h",
+                                        "remaining_fraction": 0.8,
+                                        "reset_time": "2026-10-04T00:00:00Z",
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                },
+            }
+
+        with (
+            mock.patch(
+                "antigravity_cli_switcher.manager.quota._fetch_native_quota",
+                side_effect=fake_fetch_native,
+            ),
+            mock.patch.object(m.identity, "_best_effort_live_identity", return_value=None),
+        ):
+            result = m.refresh_account_usage(self.paths, backend="native")
+        self.assertEqual(result.account, "a")
+        self.assertEqual(result.backend, "native")
         self.assertEqual(self.token(m.account_dir(self.paths, "a")).read_text(encoding="utf-8"), payload)
         self.assertEqual(self.token(self.live_home).read_text(encoding="utf-8"), "token-b")
 
@@ -335,7 +380,7 @@ class ManagerRegressionTests(unittest.TestCase):
             mock.patch("antigravity_cli_switcher.manager.quota._cloudcode_request", return_value=load_resp),
         ):
             with self.assertRaises(ValueError) as ctx:
-                m.refresh_account_usage(self.paths, "a")
+                m.refresh_account_usage(self.paths, "a", backend="http")
             self.assertIn("Eligibility check failed", str(ctx.exception))
 
         state = m.load_state(self.paths)

@@ -19,9 +19,11 @@ def cmd_refresh_usage(paths: ManagerPaths, args: argparse.Namespace) -> int:
         args.name,
         agy_binary=args.agy_binary,
         timeout_seconds=args.warmup_timeout_seconds,
+        backend=getattr(args, "backend", None),
     )
     refresh_payload = {
         "account": refresh_res.account,
+        "backend": refresh_res.backend,
         "source_home": refresh_res.source_home,
         "project_id": refresh_res.project_id,
         "plan_type": refresh_res.plan_type,
@@ -45,7 +47,7 @@ def cmd_refresh_usage(paths: ManagerPaths, args: argparse.Namespace) -> int:
         other_short = other_short_window.get("value") if isinstance(other_short_window, dict) else None
         other_value = "-" if other_short is None else f"{other_short:.2f}%"
         print(
-            f"refreshed-usage: {refresh_res.account} gemini_5h={short_value} other_5h={other_value} "
+            f"refreshed-usage: {refresh_res.account} [{refresh_res.backend}] gemini_5h={short_value} other_5h={other_value} "
             f"reset_at={refresh_res.short_reset_at or '-'} buckets={refresh_res.bucket_count}"
         )
     return 0
@@ -57,6 +59,7 @@ def cmd_refresh_due(paths: ManagerPaths, args: argparse.Namespace) -> int:
         paths,
         agy_binary=args.agy_binary,
         timeout_seconds=args.warmup_timeout_seconds,
+        backend=getattr(args, "backend", None),
     )
     if due_res is None:
         empty_due_payload = {"refreshed": False, "account": None, "reason": "no_due_account"}
@@ -82,6 +85,7 @@ def cmd_refresh_due(paths: ManagerPaths, args: argparse.Namespace) -> int:
         "weekly_reset_at": due_res.weekly_reset_at,
         "usage_families": due_res.usage_families,
         "bucket_count": due_res.bucket_count,
+        "backend": due_res.backend,
     }
     if args.json:
         print(json.dumps(due_payload, indent=2, sort_keys=True))
@@ -92,7 +96,7 @@ def cmd_refresh_due(paths: ManagerPaths, args: argparse.Namespace) -> int:
         other_short = other_short_window.get("value") if isinstance(other_short_window, dict) else None
         other_value = "-" if other_short is None else f"{other_short:.2f}%"
         print(
-            f"refresh-due: {due_res.account} gemini_5h={short_value} other_5h={other_value} "
+            f"refresh-due: {due_res.account} [{due_res.backend}] gemini_5h={short_value} other_5h={other_value} "
             f"reset_at={due_res.short_reset_at or '-'} buckets={due_res.bucket_count}"
         )
     return 0
@@ -153,6 +157,7 @@ def cmd_refresh_all(paths: ManagerPaths, args: argparse.Namespace) -> int:
                 name,
                 agy_binary=args.agy_binary,
                 timeout_seconds=args.warmup_timeout_seconds,
+                backend=getattr(args, "backend", None),
             )
             gemini_fam = (
                 (batch_refresh_res.usage_families.get("gemini") or {})
@@ -178,10 +183,13 @@ def cmd_refresh_all(paths: ManagerPaths, args: argparse.Namespace) -> int:
                     "gemini_short": g_val,
                     "other_short": o_val,
                     "reset_at": batch_refresh_res.short_reset_at,
+                    "backend": batch_refresh_res.backend,
                 }
             )
             if not args.json:
-                print(f"OK (gemini={g_str}, other={o_str}, plan={batch_refresh_res.plan_type or '-'})")
+                print(
+                    f"OK [{batch_refresh_res.backend}] (gemini={g_str}, other={o_str}, plan={batch_refresh_res.plan_type or '-'})"
+                )
         except Exception as exc:
             errors.append({"account": name, "success": False, "error": str(exc)})
             if not args.json:

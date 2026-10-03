@@ -8,7 +8,7 @@
   </p>
   <p>Active-standby account manager and quota failover switcher for Antigravity CLI on Linux</p>
   <p>
-    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-194%20passed-2ea043" alt="Tests"></a>
+    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-217%20passed-2ea043" alt="Tests"></a>
     <a href="https://github.com/abstraction/antigravity-cli-switcher"><img src="https://img.shields.io/badge/python-3.10+-3776ab" alt="Python"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   </p>
@@ -40,6 +40,7 @@ On Linux, `agy` stores OAuth credentials directly in the global FreeDesktop Secr
 * **Interactive Textual TUI.** Five operational tabs (Accounts, Hygiene, History, Logs, Proxies) with keyboard navigation and modal dialogs.
 * **Per-account proxy routing.** Assigns independent HTTP, HTTPS, or SOCKS5 proxies to individual accounts.
 * **Credential hygiene engine.** Audits stored profiles, detects expired tokens, and flags file corruptions with automated repair commands.
+* **Multi-backend quota polling.** Direct CloudCode HTTP engine (default, ~0.4s) avoids machine telemetry and keyring flapping. Native CLI wrapper executes inside isolated keyring buffers.
 * **Headless automation.** Subcommands execute without loading the Textual framework, returning structured JSON via `--json` and standard exit codes.
 
 ## Requirements
@@ -244,16 +245,81 @@ Candidate selection strategies:
 
 ## Quota refresh operations
 
+`acs` supports three quota polling backends: `http` (default), `native`, and `auto`.
+
+* **`http` (default)**: Direct HTTPS requests to CloudCode API (`daily-cloudcode-pa.googleapis.com`). Executes in ~0.4s. Does not send hardware identifiers (`canonical_device_id`, DMI product names) or telemetry to Google Clearcut (`play.googleapis.com`). Avoids OS keyring flapping for accounts with cached tokens.
+* **`native`**: Executes `agy -p "/usage" --output-format json` wrapped in `_isolated_keyring_warmup`. Uses the official Go binary TLS fingerprint, but takes ~6.7s per invocation and transmits machine telemetry.
+* **`auto`**: Attempts `native` first and automatically falls back to `http` if the CLI command fails or returns zero quota buckets.
+
+### CLI commands and backend overrides
+
+View or set the global quota backend:
+
 ```bash
-# Refresh quota for a specific account
+# View current quota polling backend (http by default)
+acs quota-backend
+
+# Set quota polling backend globally (http / native / auto)
+acs quota-backend http
+```
+
+Refresh quota usage using the active global backend or specify an explicit backend override:
+
+```bash
+# Refresh quota for a specific account (using global default or explicit backend)
 acs refresh-usage work
+acs refresh-usage work --backend native
 
 # Refresh quota for the account next due according to policy
 acs refresh-due
+acs refresh-due --backend auto
 
 # Sequentially refresh all accounts with delay between requests
 acs refresh-all --delay-seconds 2.0 --skip-exhausted --skip-disabled
 ```
+
+### Architecture and telemetry mechanics
+
+Deep binary reconnaissance of the official `antigravity` (`agy`) Go binary revealed critical operational differences between `http` and `native` polling modes:
+
+1. **Google Clearcut Telemetry**:
+   - The `agy` CLI binary transmits operational metrics and event telemetry to Google Clearcut at `https://play.googleapis.com/log`.
+   - Polling via `native` generates network calls to Google's telemetry servers on every invocation.
+   - The `http` backend connects directly to CloudCode PA endpoints (`daily-cloudcode-pa.googleapis.com`), transmitting zero Clearcut event logs.
+
+2. **Hardware Fingerprinting & Anti-Abuse Risk**:
+   - On startup, `agy` inspects `/sys/class/dmi/id/product_name` to read machine hardware metadata, calculates a persistent `canonical_device_id`, and attaches `InstanceUuid` and `antigravity_ide_installation_id` to its requests.
+   - When running multi-account setups with standby profiles, sequential `native` polling (`acs refresh-all`) authenticates multiple distinct Google user accounts from the exact same hardware fingerprint within seconds.
+   - Transmitting multiple user tokens linked to an identical hardware fingerprint creates an immediate anti-abuse red flag (sybil and account-sharing detection) at Google's security perimeter, increasing the risk of automated 403 ToS suspensions.
+   - The `http` backend completely bypasses the CLI binary: it does not read DMI hardware metadata, does not compute device fingerprints, and attaches no hardware UUIDs.
+
+3. **Dynamic User-Agent Resolution**:
+   - Google CloudCode API validates client identification. Rather than hardcoding static version strings, the `http` backend queries the locally installed `agy` binary (`agy --version`) at runtime via `resolve_agy_binary`.
+   - Requests include dynamic headers matching the installed runtime (e.g., `User-Agent: antigravity/1.2.16 linux/amd64` and `Accept: application/json`).
+
+4. **Performance and Keyring Stability**:
+   - `http` backend calls complete in ~0.4s per account, compared to ~6.7s for `native` subprocess execution.
+   - `http` uses stored OAuth access tokens directly and refreshes them via Google token endpoints only when expired. For accounts with valid cached tokens, `http` requires zero D-Bus OS keyring operations, eliminating keyring flapping.
+   
+5. **Direct HTTP Token Refresh**:
+   - Token refresh via `agy models` was historically necessary to keep active sessions alive. However, running `agy models` leaks hardware telemetry just like `native` quota polling.
+   - The `http` backend now performs token refreshment entirely via direct `urllib` POSTs to `oauth2.googleapis.com/token` utilizing the embedded `1071006060591` native desktop client credentials, achieving a completely binary-free quota lifecycle.
+
+6. **Anti-Thundering Herd Global Governor**:
+   - Launching `acs` after a long idle period could traditionally spawn a "thundering herd" burst of quota requests from 20+ distinct standby accounts simultaneously.
+   - The system now features a global persistent pacing governor (`last_background_refresh_at` stored in `state.json`) that spaces out automated background due refreshes by at least 35 seconds across both CLI watch daemons and the TUI interface.
+   - Additionally, exhausted accounts employ **reset-aware sleeping**, halting 300s polling loops and strictly sleeping until their next quota window begins.
+
+| Metric / Dimension | `http` (Default) | `native` | `auto` |
+|---|---|---|---|
+| **Speed** | ~0.4s per account | ~6.7s per account | ~6.7s native / ~0.4s fallback |
+| **Clearcut Telemetry** | None | Sends to `play.googleapis.com/log` | Depends on executed backend |
+| **Hardware Fingerprint** | None | Sends `canonical_device_id`, DMI ID | Depends on executed backend |
+| **Multi-Account Abuse Risk** | Minimal | High (same hardware ID across accounts) | Medium |
+| **TLS JA3 Fingerprint** | Python OpenSSL | Native Go `crypto/tls` | Go first, Python fallback |
+| **OS Keyring Flapping** | None (with cached token) | Requires `_isolated_keyring_warmup` | Keyring warmup on native attempt |
+| **Primary Use Case** | Production & multi-account setups | Single-account testing / JA3 checks | Fallback safety net |
+
 
 ## Proxy management
 
@@ -332,6 +398,7 @@ The migration utility creates a timestamped backup archive of the legacy directo
 | `acs rename <old> <new>` | Rename an account profile |
 | `acs delete <name>` | Delete an account profile directory |
 | `acs set-email <name> [email]` | Set or clear expected email address for verification |
+| `acs quota-backend [backend]` | Get or set the global quota polling backend (`http`, `native`, `auto`) |
 | `acs refresh-usage <name>` | Query quota metrics for an account |
 | `acs refresh-due` | Refresh quota for accounts due by policy schedule |
 | `acs refresh-all` | Sequentially refresh quota metrics for all accounts |

@@ -120,11 +120,13 @@ async def test_header_bar_reactivity() -> None:
     header.refresh_interval = 10
     header.switch_mode = "auto"
     header.sort_mode = "health"
+    header.quota_backend = "http"
     assert header.active_account == "alpha"
     assert header.account_count == 5
     assert header.refresh_interval == 10
     assert header.switch_mode == "auto"
     assert header.sort_mode == "health"
+    assert header.quota_backend == "http"
 
 
 @pytest.mark.asyncio

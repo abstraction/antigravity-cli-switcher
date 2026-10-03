@@ -169,6 +169,7 @@ class DashboardScreen(DashboardActionsScreenBase):
         header.active_account = self.snapshot.active
         header.account_count = len(self.snapshot.accounts)
         header.switch_mode = self.snapshot.switch_mode
+        header.quota_backend = self.snapshot.quota_backend
         header.refresh_interval = self.acs_app.refresh_interval_seconds
         header.sort_mode = self.sort_mode
 
