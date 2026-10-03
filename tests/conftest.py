@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from antigravity_cli_switcher.tui.app import ACSApp
@@ -21,3 +23,13 @@ def disable_tui_background_workers(monkeypatch: pytest.MonkeyPatch) -> None:
         "antigravity_cli_switcher.tui.app.ACSApp.start_due_watcher",
         lambda self: None,
     )
+
+
+@pytest.fixture(autouse=True)
+def isolate_test_logger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate logging handler so tests never write to user ~/.antigravity-cli-switcher logs."""
+    import antigravity_cli_switcher.log as log_mod
+
+    test_root = tmp_path / "acs_root"
+    monkeypatch.setenv("ACS_ROOT", str(test_root))
+    monkeypatch.setattr(log_mod, "_logger", None)

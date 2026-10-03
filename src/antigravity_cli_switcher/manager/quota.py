@@ -239,7 +239,7 @@ def _ensure_fresh_access_token(
     from antigravity_cli_switcher.log import get_logger
 
     get_logger().warning(
-        f"HTTP token refresh failed for {source_home.parent.name}. Falling back to native agy models warmup. "
+        f"HTTP token refresh failed for {source_home.name}. Falling back to native agy models warmup. "
         "Google OAuth desktop credentials may have rotated."
     )
 

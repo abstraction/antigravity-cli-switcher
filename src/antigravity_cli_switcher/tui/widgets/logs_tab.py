@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from antigravity_cli_switcher.tui.app import ACSApp
 
 LOG_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+\[([A-Z]+)\]\s+([^:]+):\s+(.*)$")
+DEFAULT_LOG_BUFFER_LINES: int = 10_000
 
 
 class LogsTab(Widget):
@@ -54,6 +55,7 @@ class LogsTab(Widget):
             markup=False,
             wrap=True,
             auto_scroll=True,
+            max_lines=None,
         )
 
     def on_mount(self) -> None:
@@ -90,8 +92,8 @@ class LogsTab(Widget):
             with open(log_file, encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()
                 self._file_offset = f.tell()
-            # Keep up to last 1000 lines
-            self._raw_lines = lines[-1000:]
+            # Keep up to last DEFAULT_LOG_BUFFER_LINES
+            self._raw_lines = lines[-DEFAULT_LOG_BUFFER_LINES:]
             self._render_filtered_lines()
         except Exception as exc:
             self._raw_lines = [f"Error reading log file: {exc}"]
@@ -125,7 +127,7 @@ class LogsTab(Widget):
             rich_log = self.query_one("#logs-rich-log", RichLog)
             for line in new_lines:
                 self._raw_lines.append(line)
-                if len(self._raw_lines) > 2000:
+                if len(self._raw_lines) > DEFAULT_LOG_BUFFER_LINES:
                     self._raw_lines.pop(0)
 
                 if self._matches_filter(line):

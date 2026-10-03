@@ -116,27 +116,32 @@ ProxyTab, HygieneTab, HistoryTab, LogsTab {
 
 /* Tab: Logs */
 #logs-filter-bar {
-    height: 3;
+    height: 1;
     align: left middle;
-    background: $panel;
-    border: round $primary-muted;
-    padding: 0 1;
-    margin-top: 1;
+    background: transparent;
+    padding: 0;
+    margin: 1 0 0 0;
 }
 
 #logs-filter-bar Button {
+    height: 1;
+    min-height: 1;
+    min-width: 6;
+    border: none;
+    padding: 0 1;
     margin-right: 1;
-    min-width: 8;
 }
 
 #logs-filter-label {
     text-style: bold;
     color: $accent;
+    width: auto;
     margin-right: 1;
 }
 
 #logs-path-info {
     color: $text-muted;
+    width: auto;
     margin-left: 2;
 }
 
