@@ -209,6 +209,7 @@ class StatusSnapshot(BaseModel):
     lock_file: str
     live_dir: str | None = None
     active: str | None = None
+    quota_backend: str = "native"
     active_proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     switch_mode: str = "manual"
     switch_policy: SwitchPolicy = Field(default_factory=SwitchPolicy)

@@ -142,8 +142,10 @@ def _parse_model_label(value: str) -> dict | None:
 
 
 def _parse_summary_bucket(bucket: dict) -> dict:
-    remaining = bucket.get("remainingFraction")
-    reset_raw = bucket.get("resetTime")
+    remaining = bucket.get("remaining_fraction")
+    if remaining is None:
+        remaining = bucket.get("remainingFraction")
+    reset_raw = bucket.get("reset_time") or bucket.get("resetTime")
     reset_at = None
     if isinstance(reset_raw, str):
         reset_at = _normalize_timestamp(reset_raw.replace("Z", "+00:00"))
@@ -157,12 +159,22 @@ def _parse_summary_bucket(bucket: dict) -> dict:
 def _select_quota_summary_group(summary_response: dict) -> dict | None:
     groups = summary_response.get("groups")
     if not isinstance(groups, list):
+        cmd = summary_response.get("command")
+        if isinstance(cmd, dict):
+            cmd_data = cmd.get("data")
+            if isinstance(cmd_data, dict):
+                groups = cmd_data.get("groups")
+        if not isinstance(groups, list):
+            data_field = summary_response.get("data")
+            if isinstance(data_field, dict):
+                groups = data_field.get("groups")
+    if not isinstance(groups, list):
         return None
     normalized = [group for group in groups if isinstance(group, dict)]
     if not normalized:
         return None
     for group in normalized:
-        display_name = group.get("displayName")
+        display_name = group.get("displayName") or group.get("name")
         if isinstance(display_name, str) and "gemini" in display_name.lower():
             return group
     return normalized[0]
@@ -174,12 +186,12 @@ def _quota_group_family(group: dict) -> str | None:
         for bucket in buckets:
             if not isinstance(bucket, dict):
                 continue
-            bucket_id = str(bucket.get("bucketId") or "").lower()
+            bucket_id = str(bucket.get("bucketId") or bucket.get("id") or "").lower()
             if bucket_id.startswith("gemini-"):
                 return "gemini"
             if bucket_id.startswith("3p-"):
                 return "other"
-    label = " ".join(str(group.get(key) or "") for key in ("displayName", "description")).lower()
+    label = " ".join(str(group.get(key) or "") for key in ("displayName", "name", "description")).lower()
     if "gemini" in label:
         return "gemini"
     if "claude" in label or "gpt" in label:
@@ -190,6 +202,16 @@ def _quota_group_family(group: dict) -> str | None:
 def _parse_quota_families_from_summary(summary_response: dict) -> tuple[dict, int]:
     families = _default_usage_families()
     groups = summary_response.get("groups")
+    if not isinstance(groups, list):
+        cmd = summary_response.get("command")
+        if isinstance(cmd, dict):
+            cmd_data = cmd.get("data")
+            if isinstance(cmd_data, dict):
+                groups = cmd_data.get("groups")
+        if not isinstance(groups, list):
+            data_field = summary_response.get("data")
+            if isinstance(data_field, dict):
+                groups = data_field.get("groups")
     if not isinstance(groups, list):
         return families, 0
     bucket_count = 0

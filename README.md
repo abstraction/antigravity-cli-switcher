@@ -8,7 +8,7 @@
   </p>
   <p>Active-standby account manager and quota failover switcher for Antigravity CLI on Linux</p>
   <p>
-    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-194%20passed-2ea043" alt="Tests"></a>
+    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-208%20passed-2ea043" alt="Tests"></a>
     <a href="https://github.com/abstraction/antigravity-cli-switcher"><img src="https://img.shields.io/badge/python-3.10+-3776ab" alt="Python"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   </p>
@@ -244,12 +244,22 @@ Candidate selection strategies:
 
 ## Quota refresh operations
 
+`acs` defaults to native quota querying via `agy -p "/usage"` wrapped in an isolated OS keyring warmup. This eliminates WAF 403 blocks caused by TLS JA3 fingerprint mismatches. You can configure or override the polling backend at any time (`native`, `http`, or `auto` with HTTP fallback):
+
 ```bash
-# Refresh quota for a specific account
+# View current quota polling backend (native by default)
+acs quota-backend
+
+# Set quota polling backend globally (native / http / auto)
+acs quota-backend native
+
+# Refresh quota for a specific account (using default or explicit backend)
 acs refresh-usage work
+acs refresh-usage work --backend http
 
 # Refresh quota for the account next due according to policy
 acs refresh-due
+acs refresh-due --backend auto
 
 # Sequentially refresh all accounts with delay between requests
 acs refresh-all --delay-seconds 2.0 --skip-exhausted --skip-disabled

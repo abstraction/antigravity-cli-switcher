@@ -249,3 +249,70 @@ def test_cli_resolve_route_and_ensure_active_claude(mock_root: Path, capsys: pyt
     out, _ = capsys.readouterr()
     data = json.loads(out)
     assert data["preferred_family"] == "other"
+
+
+def test_cli_quota_backend_get_and_set(mock_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # 1. Get default backend
+    code = main(["--root", str(mock_root), "quota-backend"])
+    assert code == 0
+    out, _ = capsys.readouterr()
+    assert out.strip() == "native"
+
+    # 2. Get default backend via JSON
+    code = main(["--root", str(mock_root), "quota-backend", "--json"])
+    assert code == 0
+    out, _ = capsys.readouterr()
+    assert json.loads(out) == {"quota_backend": "native"}
+
+    # 3. Set to http
+    code = main(["--root", str(mock_root), "quota-backend", "http"])
+    assert code == 0
+    out, _ = capsys.readouterr()
+    assert "quota-backend: http" in out
+
+    # Verify state updated
+    paths = build_paths(mock_root)
+    state = load_state(paths)
+    assert state["quota_backend"] == "http"
+
+    # 4. Set to auto via JSON
+    code = main(["--root", str(mock_root), "quota-backend", "auto", "--json"])
+    assert code == 0
+    out, _ = capsys.readouterr()
+    assert json.loads(out) == {"quota_backend": "auto"}
+    state = load_state(paths)
+    assert state["quota_backend"] == "auto"
+
+
+def test_cli_refresh_usage_with_backend_flag(mock_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from antigravity_cli_switcher.manager.quota import UsageRefreshResult
+
+    called_kwargs: dict[str, object] = {}
+
+    def mock_refresh(paths, name, agy_binary=None, timeout_seconds=30, backend=None):
+        called_kwargs["account"] = name
+        called_kwargs["backend"] = backend
+        return UsageRefreshResult(
+            account=name,
+            source_home=str(paths.root),
+            project_id=None,
+            plan_type="free",
+            prompt_credits_available=None,
+            prompt_credits_monthly=None,
+            short_usage_status="known",
+            short_usage_value=90.0,
+            short_reset_at=None,
+            weekly_usage_status="known",
+            weekly_usage_value=85.0,
+            weekly_reset_at=None,
+            usage_families={},
+            bucket_count=0,
+            backend=backend or "native",
+        )
+
+    monkeypatch.setattr("antigravity_cli_switcher.cli.refresh.refresh_account_usage", mock_refresh)
+
+    code = main(["--root", str(mock_root), "refresh-usage", "alpha", "--backend", "http", "--json"])
+    assert code == 0
+    assert called_kwargs["backend"] == "http"
+    assert called_kwargs["account"] == "alpha"

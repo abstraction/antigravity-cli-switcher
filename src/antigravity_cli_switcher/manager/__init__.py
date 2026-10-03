@@ -89,6 +89,7 @@ from antigravity_cli_switcher.manager.keyring import (
     is_synthetic_or_test_token,
 )
 from antigravity_cli_switcher.manager.locking import manager_lock
+from antigravity_cli_switcher.manager.native_quota import _fetch_native_quota
 from antigravity_cli_switcher.manager.paths import (
     ManagerPaths,
     _oauth_token_path,
@@ -102,11 +103,15 @@ from antigravity_cli_switcher.manager.paths import (
 from antigravity_cli_switcher.manager.policy import (
     DEFAULT_CANDIDATE_STRATEGY,
     DEFAULT_FAMILY_FALLBACK_STRATEGY,
+    DEFAULT_QUOTA_BACKEND,
     DEFAULT_SHORT_SWITCH_THRESHOLD_PERCENT,
     DEFAULT_SWITCH_MODE,
+    VALID_QUOTA_BACKENDS,
     _default_switch_policy,
+    get_quota_backend,
     get_switch_mode,
     get_switch_policy,
+    set_quota_backend,
     set_switch_mode,
     update_switch_policy,
 )
@@ -161,11 +166,13 @@ __all__ = [
     "DEFAULT_CANDIDATE_STRATEGY",
     "DEFAULT_FALLBACK_STRATEGY",
     "DEFAULT_FAMILY_FALLBACK_STRATEGY",
+    "DEFAULT_QUOTA_BACKEND",
     "DEFAULT_REFRESH_POLICY_SECONDS",
     "DEFAULT_SHORT_SWITCH_THRESHOLD_PERCENT",
     "DEFAULT_SWITCH_DEDUPE_SECONDS",
     "DEFAULT_SWITCH_MODE",
     "DEFAULT_SWITCH_STRATEGY",
+    "VALID_QUOTA_BACKENDS",
     "_IN_MEMORY_KEYRING",
     "EnsureActiveResult",
     "HygieneAuditResult",
@@ -185,6 +192,7 @@ __all__ = [
     "_default_usage_windows",
     "_derive_health_status",
     "_eligible_switch_candidates",
+    "_fetch_native_quota",
     "_identity_from_antigravity_token",
     "_is_test_environment",
     "_isolated_keyring_warmup",
@@ -223,6 +231,7 @@ __all__ = [
     "get_account_identity",
     "get_account_proxy",
     "get_live_dir",
+    "get_quota_backend",
     "get_status_snapshot",
     "get_switch_mode",
     "get_switch_policy",
@@ -266,6 +275,7 @@ __all__ = [
     "set_enabled",
     "set_expected_email",
     "set_live_dir",
+    "set_quota_backend",
     "set_switch_mode",
     "state",
     "subprocess",

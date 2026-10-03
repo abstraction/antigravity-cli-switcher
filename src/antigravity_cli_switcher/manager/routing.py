@@ -380,6 +380,7 @@ def refresh_due_account(
     paths: ManagerPaths,
     agy_binary: str | None = None,
     timeout_seconds: int = 30,
+    backend: str | None = None,
 ) -> UsageRefreshResult | None:
     from antigravity_cli_switcher.manager.quota import refresh_account_usage
 
@@ -391,4 +392,5 @@ def refresh_due_account(
         name=target,
         agy_binary=agy_binary,
         timeout_seconds=timeout_seconds,
+        backend=backend,
     )
