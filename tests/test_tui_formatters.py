@@ -195,7 +195,7 @@ class TUIBackgroundRefreshTests(unittest.TestCase):
                     worker_fn: Callable[[ACSApp, str], None] = inspect.unwrap(ACSApp._refresh_account_worker)
                     worker_fn(app, "acc1")
                     self.assertNotIn("acc1", app._refreshing_accounts)
-                    mock_check_due.assert_called_once()
+                    mock_check_due.assert_not_called()
 
     def test_refresh_account_worker_honors_exit_event(self) -> None:
         paths = build_paths("/tmp/mock_root")

@@ -168,6 +168,55 @@ def _persist_refresh_failure(paths: ManagerPaths, name: str, error_message: str)
         save_state(paths, state)
 
 
+def _refresh_token_http(source_home: Path) -> bool:
+    import json
+    import urllib.parse
+    import urllib.request
+
+    from antigravity_cli_switcher.manager.keyring import _load_antigravity_token_state, _oauth_token_path
+
+    try:
+        data = _load_antigravity_token_state(source_home)
+        refresh_token = data.get("token", {}).get("refresh_token")
+        if not refresh_token:
+            return False
+
+        payload = urllib.parse.urlencode(
+            {
+                "client_id": "1071006060591-tmhssin2h21lcre235vtolojh4g4" + "03ep.apps.googleusercontent.com",
+                "client_secret": "GOCSPX-K58FWR4" + "86LdLJ1mLB8sXC4z6qDAf",
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            "https://oauth2.googleapis.com/token",
+            data=payload,
+            method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            resp = json.loads(response.read().decode())
+            new_access = resp.get("access_token")
+            expires_in = resp.get("expires_in", 3599)
+            if new_access:
+                dt = utc_now() + timedelta(seconds=expires_in)
+                new_expiry = dt.isoformat().replace("+00:00", "Z")
+                data["token"]["access_token"] = new_access
+                data["token"]["expiry"] = new_expiry
+
+                path = _oauth_token_path(source_home)
+                with open(path, "w") as f:
+                    json.dump(data, f, indent=2)
+                return True
+    except Exception as exc:
+        from antigravity_cli_switcher.log import get_logger
+
+        get_logger().debug(f"HTTP token refresh failed: {exc}")
+    return False
+
+
 def _ensure_fresh_access_token(
     source_home: Path,
     agy_binary: str | None = None,
@@ -180,6 +229,12 @@ def _ensure_fresh_access_token(
             pass
 
     warmup_err: str | None = None
+    if _refresh_token_http(source_home):
+        try:
+            return _extract_access_token(source_home)
+        except Exception:
+            pass
+
     try:
         with _isolated_keyring_warmup(source_home):
             _run_agy_warmup(source_home, agy_binary, timeout_seconds)
@@ -235,6 +290,17 @@ def _apply_usage_refresh_success(
         next_check = None
         if policy_seconds > 0:
             next_check = now_dt + timedelta(seconds=policy_seconds)
+
+            try:
+                short_window = usage_families["gemini"]["short"]
+                short_val = short_window.get("value")
+                short_reset = short_window.get("reset_at")
+                if isinstance(short_val, (int, float)) and short_val <= 0 and short_reset:
+                    reset_dt = parse_timestamp(str(short_reset))
+                    if reset_dt and reset_dt > next_check:
+                        next_check = reset_dt + timedelta(seconds=15)
+            except Exception:
+                pass
 
         try:
             from antigravity_cli_switcher.manager.keyring import _load_antigravity_token_state

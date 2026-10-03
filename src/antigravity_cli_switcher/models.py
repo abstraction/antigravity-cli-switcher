@@ -217,6 +217,7 @@ class StatusSnapshot(BaseModel):
     switch_runtime: SwitchRuntime = Field(default_factory=SwitchRuntime)
     switch_history: list[SwitchHistoryEntry] = Field(default_factory=list)
     log_watch: LogWatchState = Field(default_factory=LogWatchState)
+    last_background_refresh_at: str | None = None
     accounts: dict[str, AccountMeta] = Field(default_factory=dict)
 
 

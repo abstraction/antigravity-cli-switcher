@@ -152,11 +152,6 @@ class ACSApp(App[int]):
             )
         finally:
             self._refreshing_accounts.discard(account_name)
-            if not self._exit_event.is_set() and not self._pause_background.is_set():
-                try:
-                    self.check_due_refresh()
-                except Exception:
-                    pass
 
     @work(thread=True, group="log-watcher", exit_on_error=False)
     def start_log_watcher(self) -> None:
