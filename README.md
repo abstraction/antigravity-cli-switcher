@@ -36,7 +36,7 @@ On Linux, `agy` stores OAuth credentials directly in the global FreeDesktop Secr
 
 * **OS keyring isolation.** Protects the active session credential while background processes check quotas or probe standby profiles.
 * **Independent quota windows.** Evaluates `gemini-5h`, `gemini-weekly`, `other-5h`, and `other-weekly` quotas separately.
-* **Configurable candidate ranking.** Selects standby accounts using `balanced`, `highest-short`, or `round-robin` strategies.
+* **Configurable candidate ranking.** Selects standby accounts using `squeeze`, `highest-short`, or `round-robin` strategies.
 * **Interactive Textual TUI.** Five operational tabs (Accounts, Hygiene, History, Logs, Proxies) with keyboard navigation and modal dialogs.
 * **Per-account proxy routing.** Assigns independent HTTP, HTTPS, or SOCKS5 proxies to individual accounts.
 * **Credential hygiene engine.** Audits stored profiles, detects expired tokens, and flags file corruptions with automated repair commands.
@@ -239,7 +239,7 @@ acs switch-policy --family-fallback-strategy same-family-first
 ```
 
 Candidate selection strategies:
-* `balanced` (default): Evaluates both short-term quota usage and weekly headroom.
+* `squeeze` (default): Prioritizes accounts with imminent window resets and lowest available headroom before quota waste occurs.
 * `highest-short`: Prioritizes accounts with the greatest short-term quota remaining.
 * `round-robin`: Rotates sequentially through eligible standby accounts.
 

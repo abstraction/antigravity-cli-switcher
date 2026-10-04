@@ -137,6 +137,13 @@ def test_usage_high_sort_key_order() -> None:
             "gemini": {"short": UsageWindow(value=0.0), "weekly": UsageWindow(value=0.0)},
         }
     )
+    # 100 max, 0 min -> average 50
+    acc_asymmetric = AccountMeta(
+        usage_families={
+            "gemini": {"short": UsageWindow(value=100.0), "weekly": UsageWindow(value=100.0)},
+            "other": {"short": UsageWindow(value=0.0), "weekly": UsageWindow(value=0.0)},
+        }
+    )
     acc_unknown = AccountMeta()
     acc_cooldown = AccountMeta(
         status="cooldown",
@@ -155,6 +162,7 @@ def test_usage_high_sort_key_order() -> None:
         ("acc_disabled", acc_disabled, None),
         ("acc_cooldown", acc_cooldown, None),
         ("acc_50", acc_50, None),
+        ("acc_asymmetric", acc_asymmetric, None),
         ("acc_unknown", acc_unknown, None),
         ("acc_broken", acc_broken, ver_broken),
         ("acc_100", acc_100, None),
@@ -164,15 +172,17 @@ def test_usage_high_sort_key_order() -> None:
     order = [name for name, _, _ in items]
 
     # In usage-high:
-    # 1. 100% capacity account
-    # 2. 50% account
-    # 3. 0% depleted account
-    # 4. Unknown quota account
-    # 5. Cooldown account
-    # 6. Broken auth account
-    # 7. Disabled account
+    # 1. 100% capacity account (100 max, 100 avg)
+    # 2. Asymmetric account (100 max, 50 avg) - max tiebreaker
+    # 3. 50% account (50 max, 50 avg)
+    # 4. 0% depleted account
+    # 5. Unknown quota account
+    # 6. Cooldown account
+    # 7. Broken auth account
+    # 8. Disabled account
     assert order == [
         "acc_100",
+        "acc_asymmetric",
         "acc_50",
         "acc_0",
         "acc_unknown",

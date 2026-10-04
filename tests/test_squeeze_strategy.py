@@ -304,9 +304,6 @@ def test_squeeze_does_not_prioritize_imminent_reset_when_exhausted(manager_paths
     assert best == "healthy_account", f"Expected healthy_account, got {best!r}"
 
 
-import pytest
-
-
 def test_highest_short_and_squeeze_routing_math(manager_paths):
     paths = manager_paths
 
@@ -349,15 +346,18 @@ def test_highest_short_and_squeeze_routing_math(manager_paths):
         },
     }
 
-    # Highest short must pick `healthy` (min=99) over `dead_claude` (min=0) over `lowest_healthy` (min=40)
+    # Highest short must now pick `dead_claude` (max=100) over `healthy` (max=99) over `lowest_healthy` (max=40)
     best_highest = _best_switch_candidate(paths, state)
-    assert best_highest == "healthy"
+    assert best_highest == "dead_claude"
 
-    # Squeeze must pick `lowest_healthy` (max=40) over `healthy` (max=99) over `dead_claude` (max=100)
+    best_highest_excluding = _best_switch_candidate(paths, state, exclude="dead_claude")
+    assert best_highest_excluding == "healthy"
+
+    # Squeeze must pick `lowest_healthy` (bottleneck=40) over `dead_claude` (bottleneck=50) over `healthy` (bottleneck=99)
     state["switch_policy"]["candidate_strategy"] = "squeeze"
     best_squeeze = _best_switch_candidate(paths, state)
     assert best_squeeze == "lowest_healthy"
 
-    # Squeeze must pick `healthy` (max=99) over `dead_claude` (max=100)
+    # Squeeze must pick `dead_claude` (bottleneck=50) over `healthy` (bottleneck=99)
     best_squeeze_excluding = _best_switch_candidate(paths, state, exclude="lowest_healthy")
-    assert best_squeeze_excluding == "healthy"
+    assert best_squeeze_excluding == "dead_claude"

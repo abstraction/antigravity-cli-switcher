@@ -227,9 +227,9 @@ def usage_sort_key(
             quota_known_rank,
             exhausted_rank,
             0,
-            -score.min_headroom,
             -score.max_headroom,
-            -float(score.nearest_reset_seconds),
+            -score.effective_quota,
+            float(score.nearest_reset_seconds),
             -score.weekly_effective,
             name.lower(),
         )
@@ -244,19 +244,23 @@ def usage_sort_key(
         if is_exhausted:
             urgency_rank = 3
             primary_metric = float(score.nearest_reset_seconds)
-            secondary_metric = 0.0
+            secondary_metric = -score.max_headroom
+            tertiary_metric = -score.effective_quota
         elif score.nearest_reset_seconds <= IMMINENT_RESET_THRESHOLD_SECONDS:
             urgency_rank = 0
             primary_metric = float(score.nearest_reset_seconds)
             secondary_metric = score.max_headroom
+            tertiary_metric = score.effective_quota
         elif is_weekly_waste:
             urgency_rank = 1
             primary_metric = float(score.nearest_weekly_reset_seconds)
             secondary_metric = -score.weekly_effective
+            tertiary_metric = -score.weekly_effective
         else:
             urgency_rank = 2
             primary_metric = score.max_headroom
-            secondary_metric = float(score.nearest_reset_seconds)
+            secondary_metric = score.effective_quota
+            tertiary_metric = float(score.nearest_reset_seconds)
 
         return (
             enabled_rank,
@@ -267,7 +271,7 @@ def usage_sort_key(
             urgency_rank,
             primary_metric,
             secondary_metric,
-            score.max_headroom,
+            tertiary_metric,
             score.weekly_effective,
             name.lower(),
         )

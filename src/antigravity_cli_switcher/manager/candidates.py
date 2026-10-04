@@ -248,12 +248,11 @@ def _best_switch_candidate(
             known_weeklies = [v for v in (g_weekly, c_weekly) if v is not None]
 
             short_value = sum(known_shorts) / len(known_shorts) if known_shorts else None
+            highest_short_value = max(known_shorts) if known_shorts else None
             weekly_value = sum(known_weeklies) / len(known_weeklies) if known_weeklies else None
 
-            squeeze_bottleneck_short = max(known_shorts) if known_shorts else None
-            squeeze_bottleneck_weekly = max(known_weeklies) if known_weeklies else None
-
-            highest_short_value = min(known_shorts) if known_shorts else None
+            squeeze_bottleneck_short = short_value
+            squeeze_bottleneck_weekly = weekly_value
 
             short_known = short_value is not None
             weekly_known = weekly_value is not None
@@ -300,6 +299,7 @@ def _best_switch_candidate(
             score = (
                 0 if short_known else 1,
                 -(highest_short_value if highest_short_value is not None else -1.0),
+                -(short_value if short_value is not None else -1.0),
                 _candidate_health_priority(health),
                 int(meta_dict.get("refresh_fail_count", 0) or 0),
                 int(meta_dict.get("fail_count", 0) or 0),
@@ -345,18 +345,22 @@ def _best_switch_candidate(
                 urgency = 3
                 primary = float(nearest_reset)
                 secondary = -bottleneck
+                tertiary = -(short_value if short_value is not None else 0.0)
             elif is_imminent:
                 urgency = 0
                 primary = float(nearest_reset)
                 secondary = bottleneck
+                tertiary = short_value if short_value is not None else 0.0
             elif is_weekly_waste:
                 urgency = 1
                 primary = float(weekly_reset_secs)
                 secondary = -weekly_val
+                tertiary = -weekly_val
             else:
                 urgency = 2
                 primary = bottleneck
-                secondary = float(nearest_reset)
+                secondary = short_value if short_value is not None else 0.0
+                tertiary = float(nearest_reset)
 
             score = (
                 _candidate_health_priority(health),
@@ -365,6 +369,7 @@ def _best_switch_candidate(
                 urgency,
                 primary,
                 secondary,
+                tertiary,
                 name.lower(),
             )
         else:
