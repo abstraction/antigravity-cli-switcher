@@ -101,7 +101,7 @@ def calculate_account_usage_score(meta: AccountMeta, now: datetime) -> AccountUs
     has_known_quota = len(known_effs) > 0
 
     if has_known_quota:
-        effective_quota = min(known_effs)
+        effective_quota = sum(known_effs) / len(known_effs)
         max_headroom = max(known_effs)
         min_headroom = min(known_effs)
     else:
@@ -227,7 +227,7 @@ def usage_sort_key(
             quota_known_rank,
             exhausted_rank,
             0,
-            -score.effective_quota,
+            -score.min_headroom,
             -score.max_headroom,
             -float(score.nearest_reset_seconds),
             -score.weekly_effective,
@@ -248,14 +248,14 @@ def usage_sort_key(
         elif score.nearest_reset_seconds <= IMMINENT_RESET_THRESHOLD_SECONDS:
             urgency_rank = 0
             primary_metric = float(score.nearest_reset_seconds)
-            secondary_metric = score.effective_quota
+            secondary_metric = score.max_headroom
         elif is_weekly_waste:
             urgency_rank = 1
             primary_metric = float(score.nearest_weekly_reset_seconds)
             secondary_metric = -score.weekly_effective
         else:
             urgency_rank = 2
-            primary_metric = score.effective_quota
+            primary_metric = score.max_headroom
             secondary_metric = float(score.nearest_reset_seconds)
 
         return (

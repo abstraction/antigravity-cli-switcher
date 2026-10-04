@@ -247,8 +247,14 @@ def _best_switch_candidate(
             known_shorts = [v for v in (g_short, c_short) if v is not None]
             known_weeklies = [v for v in (g_weekly, c_weekly) if v is not None]
 
-            short_value = min(known_shorts) if known_shorts else None
-            weekly_value = min(known_weeklies) if known_weeklies else None
+            short_value = sum(known_shorts) / len(known_shorts) if known_shorts else None
+            weekly_value = sum(known_weeklies) / len(known_weeklies) if known_weeklies else None
+
+            squeeze_bottleneck_short = max(known_shorts) if known_shorts else None
+            squeeze_bottleneck_weekly = max(known_weeklies) if known_weeklies else None
+
+            highest_short_value = min(known_shorts) if known_shorts else None
+
             short_known = short_value is not None
             weekly_known = weekly_value is not None
 
@@ -258,28 +264,33 @@ def _best_switch_candidate(
             c_exhausted = _is_family_quota_exhausted(
                 meta_dict, current, threshold_percent=threshold_percent, family="claude"
             )
-            quota_low = g_exhausted or c_exhausted
-            # Skip accounts where every known family is exhausted — they
-            # have nothing to offer and would score primary=0.0, beating
-            # healthy accounts in the squeeze sort.
             g_known = g_short is not None or g_weekly is not None
             c_known = c_short is not None or c_weekly is not None
+
             all_known_exhausted = ((g_known and g_exhausted) or not g_known) and (
                 (c_known and c_exhausted) or not c_known
             )
+
+            quota_low = all_known_exhausted
+
             if all_known_exhausted and (g_known or c_known):
                 continue
         else:
             short_value = _candidate_usage_value(meta_dict, "short", family=family)
             weekly_value = _candidate_usage_value(meta_dict, "weekly", family=family)
             short_known = short_value is not None
+            weekly_known = weekly_value is not None
+
+            squeeze_bottleneck_short = short_value
+            squeeze_bottleneck_weekly = weekly_value
+            highest_short_value = short_value
+
             quota_low = _is_family_quota_exhausted(
                 meta_dict,
                 current,
                 threshold_percent=threshold_percent,
                 family=family,
             )
-            weekly_known = weekly_value is not None
 
             if quota_low:
                 continue
@@ -288,7 +299,7 @@ def _best_switch_candidate(
         if strategy == "highest-short":
             score = (
                 0 if short_known else 1,
-                -(short_value if short_value is not None else -1.0),
+                -(highest_short_value if highest_short_value is not None else -1.0),
                 _candidate_health_priority(health),
                 int(meta_dict.get("refresh_fail_count", 0) or 0),
                 int(meta_dict.get("fail_count", 0) or 0),
@@ -303,8 +314,8 @@ def _best_switch_candidate(
                 name.lower(),
             )
         elif strategy == "squeeze":
-            short_val = short_value if short_value is not None else 0.0
-            weekly_val = weekly_value if weekly_value is not None else 0.0
+            short_val = squeeze_bottleneck_short if squeeze_bottleneck_short is not None else 0.0
+            weekly_val = squeeze_bottleneck_weekly if squeeze_bottleneck_weekly is not None else 0.0
             bottleneck = (
                 min(short_val, weekly_val)
                 if short_known and weekly_known

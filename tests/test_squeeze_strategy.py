@@ -302,3 +302,62 @@ def test_squeeze_does_not_prioritize_imminent_reset_when_exhausted(manager_paths
     # When switching away from depleted_imminent, healthy_account must be chosen over partially_exhausted
     best = _best_switch_candidate(manager_paths, state, exclude="depleted_imminent")
     assert best == "healthy_account", f"Expected healthy_account, got {best!r}"
+
+
+import pytest
+
+
+def test_highest_short_and_squeeze_routing_math(manager_paths):
+    paths = manager_paths
+
+    now = datetime(2026, 10, 2, 12, 0, 0, tzinfo=timezone.utc)
+    t_far = (now + timedelta(days=5)).isoformat()
+
+    def _window(value):
+        return {"value": value, "status": "known", "reset_at": t_far}
+
+    # "dead_claude" has 100% gemini, 0% claude. Average = 50, Max = 100, Min = 0
+    # "healthy" has 99% gemini, 99% claude. Average = 99, Max = 99, Min = 99
+    # "lowest_healthy" has 40% gemini, 40% claude. Average = 40, Max = 40, Min = 40
+    state = {
+        "switch_policy": {"candidate_strategy": "highest-short", "short_usage_threshold_percent": 10.0},
+        "accounts": {
+            "dead_claude": {
+                "usage_families": {
+                    "gemini": {"short": _window(100.0)},
+                    "other": {"short": _window(0.0)},
+                },
+                "health_status": HealthStatus.HEALTHY,
+                "status": "standby",
+            },
+            "healthy": {
+                "usage_families": {
+                    "gemini": {"short": _window(99.0)},
+                    "other": {"short": _window(99.0)},
+                },
+                "health_status": HealthStatus.HEALTHY,
+                "status": "standby",
+            },
+            "lowest_healthy": {
+                "usage_families": {
+                    "gemini": {"short": _window(40.0)},
+                    "other": {"short": _window(40.0)},
+                },
+                "health_status": HealthStatus.HEALTHY,
+                "status": "standby",
+            },
+        },
+    }
+
+    # Highest short must pick `healthy` (min=99) over `dead_claude` (min=0) over `lowest_healthy` (min=40)
+    best_highest = _best_switch_candidate(paths, state)
+    assert best_highest == "healthy"
+
+    # Squeeze must pick `lowest_healthy` (max=40) over `healthy` (max=99) over `dead_claude` (max=100)
+    state["switch_policy"]["candidate_strategy"] = "squeeze"
+    best_squeeze = _best_switch_candidate(paths, state)
+    assert best_squeeze == "lowest_healthy"
+
+    # Squeeze must pick `healthy` (max=99) over `dead_claude` (max=100)
+    best_squeeze_excluding = _best_switch_candidate(paths, state, exclude="lowest_healthy")
+    assert best_squeeze_excluding == "healthy"
