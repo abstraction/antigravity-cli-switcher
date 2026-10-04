@@ -137,6 +137,8 @@ def switch_next(paths: ManagerPaths) -> str:
         state = sync_state_from_disk(paths, state)
         _sync_runtime_to_live_dir(paths, state)
         save_state(paths, state)
+        logger = get_logger(paths.root)
+        logger.info(f"Switched active account to: {target}")
         return target
 
 

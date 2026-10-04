@@ -152,7 +152,7 @@ class SwitchPolicy(BaseModel):
     short_usage_threshold_percent: float = 10.0
     family_thresholds: dict[str, float] = Field(default_factory=lambda: {"gemini": 10.0, "other": 10.0})
     refresh_failure_threshold: int = 2
-    candidate_strategy: str = "balanced"
+    candidate_strategy: str = "squeeze"
     family_fallback_strategy: str = "same-family-first"
 
 

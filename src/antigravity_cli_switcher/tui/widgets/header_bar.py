@@ -19,6 +19,7 @@ class HeaderBar(Widget):
     switch_mode: reactive[str] = reactive("manual")
     sort_mode: reactive[str] = reactive("usage-low")
     quota_backend: reactive[str] = reactive("http")
+    candidate_strategy: reactive[str] = reactive("squeeze")
 
     def compose(self) -> ComposeResult:
         yield Static(id="header-content")
@@ -39,6 +40,9 @@ class HeaderBar(Widget):
         self._refresh_content()
 
     def watch_quota_backend(self, value: str) -> None:
+        self._refresh_content()
+
+    def watch_candidate_strategy(self, value: str) -> None:
         self._refresh_content()
 
     def on_resize(self, event: events.Resize) -> None:
@@ -75,6 +79,8 @@ class HeaderBar(Widget):
             text.append("│ ", style="dim")
             text.append(f"{self.quota_backend} ", style=backend_style)
             text.append("│ ", style="dim")
+            text.append(f"{self.candidate_strategy} ", style="bold blue")
+            text.append("│ ", style="dim")
             text.append(f"{self.refresh_interval}s ", style="cyan")
             text.append("│ ", style="dim")
             text.append(self.sort_mode, style="blue")
@@ -88,6 +94,8 @@ class HeaderBar(Widget):
             text.append(f"{self.switch_mode} ", style=mode_style)
             text.append("│ Quota: ", style="dim")
             text.append(f"{self.quota_backend} ", style=backend_style)
+            text.append("│ Strategy: ", style="dim")
+            text.append(f"{self.candidate_strategy} ", style="bold blue")
             text.append("│ Interval: ", style="dim")
             text.append(f"{self.refresh_interval}s ", style="cyan")
             text.append("│ Sort: ", style="dim")

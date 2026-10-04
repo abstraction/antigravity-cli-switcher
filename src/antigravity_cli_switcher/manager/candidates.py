@@ -259,6 +259,16 @@ def _best_switch_candidate(
                 meta_dict, current, threshold_percent=threshold_percent, family="claude"
             )
             quota_low = g_exhausted or c_exhausted
+            # Skip accounts where every known family is exhausted — they
+            # have nothing to offer and would score primary=0.0, beating
+            # healthy accounts in the squeeze sort.
+            g_known = g_short is not None or g_weekly is not None
+            c_known = c_short is not None or c_weekly is not None
+            all_known_exhausted = ((g_known and g_exhausted) or not g_known) and (
+                (c_known and c_exhausted) or not c_known
+            )
+            if all_known_exhausted and (g_known or c_known):
+                continue
         else:
             short_value = _candidate_usage_value(meta_dict, "short", family=family)
             weekly_value = _candidate_usage_value(meta_dict, "weekly", family=family)
@@ -317,10 +327,14 @@ def _best_switch_candidate(
             ww_deadline = float(str(policy.get("weekly_waste_deadline_hours", 48.0))) * 3600
             ww_threshold = float(str(policy.get("weekly_waste_threshold_percent", 70.0)))
 
-            is_imminent = nearest_reset <= 7200
+            is_imminent = not quota_low and nearest_reset <= 7200
             is_weekly_waste = not quota_low and weekly_reset_secs <= ww_deadline and weekly_val >= ww_threshold
 
-            if is_imminent:
+            if quota_low:
+                urgency = 3
+                primary = float(nearest_reset)
+                secondary = -bottleneck
+            elif is_imminent:
                 urgency = 0
                 primary = float(nearest_reset)
                 secondary = bottleneck
@@ -335,6 +349,7 @@ def _best_switch_candidate(
 
             score = (
                 _candidate_health_priority(health),
+                0 if not quota_low else 1,
                 0 if short_known else 1,
                 urgency,
                 primary,
