@@ -122,8 +122,8 @@ class DashboardScreen(DashboardActionsScreenBase):
             with TabPane("Proxies", id="tab-proxies"):
                 yield ProxyTab(id="proxy-tab")
         with Vertical(id="bottom-container"):
-            yield Footer()
             yield StatusBar(id="status-bar")
+            yield Footer()
 
     def on_mount(self) -> None:
         if self.initial_tab == "tab-accounts":

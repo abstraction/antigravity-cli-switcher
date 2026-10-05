@@ -32,6 +32,13 @@ class StatusBar(Widget):
 
         text = Text()
         if self.worker_status:
-            text.append(f"[{self.worker_status}] ", style="bold cyan")
-        text.append(self.message, style="bold white")
+            text.append(f"[{self.worker_status}] ", style="bold #58a6ff")
+        msg = self.message
+        if "fail" in msg.lower() or "error" in msg.lower() or "blocked" in msg.lower():
+            style = "bold #f85149"
+        elif msg.startswith("Ready"):
+            style = "#8b949e"
+        else:
+            style = "#e6edf3"
+        text.append(msg, style=style)
         status_static.update(text)

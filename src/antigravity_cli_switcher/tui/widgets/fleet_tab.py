@@ -83,27 +83,27 @@ class FleetTab(Widget):
         is_zombie: bool,
     ) -> tuple[Text, Text, Text, Text, Text, Text, Text, Text]:
         marker = " ★" if is_active else ""
-        name_style = "bold green" if is_active else "bold cyan"
+        name_style = "bold #3fb950" if is_active else "bold #58a6ff"
         name_text = Text(f"{name}{marker}", style=name_style)
 
-        status_style = "green" if status == "active" else ("dim" if status == "disabled" else "yellow")
+        status_style = "#3fb950" if status == "active" else ("dim" if status == "disabled" else "#d29922")
         status_text = Text(status, style=status_style)
 
-        duty_style = "bold green" if duty_pct > 15 else ("green" if duty_pct > 0 else "dim")
+        duty_style = "bold #3fb950" if duty_pct > 15 else ("#3fb950" if duty_pct > 0 else "dim")
         duty_text = Text(f"{duty_pct:>5.1f}%", style=duty_style)
 
-        g_style = "bold yellow" if gemini_burnt > 50 else ("white" if gemini_burnt > 0 else "dim")
+        g_style = "bold #d29922" if gemini_burnt > 50 else ("#e6edf3" if gemini_burnt > 0 else "dim")
         g_text = Text(f"{round(gemini_burnt):>3}%", style=g_style)
 
-        c_style = "bold yellow" if claude_burnt > 50 else ("white" if claude_burnt > 0 else "dim")
+        c_style = "bold #d29922" if claude_burnt > 50 else ("#e6edf3" if claude_burnt > 0 else "dim")
         c_text = Text(f"{round(claude_burnt):>3}%", style=c_style)
 
-        h_style = "bold red" if min_headroom < 20 else ("bold yellow" if min_headroom < 50 else "bold green")
+        h_style = "bold #f85149" if min_headroom < 20 else ("bold #d29922" if min_headroom < 50 else "bold #3fb950")
         h_text = Text(f"{round(min_headroom):>3}%", style=h_style)
 
-        cost_text = Text(f"${cost_usd:.0f}/mo", style="white")
+        cost_text = Text(f"${cost_usd:.0f}/mo", style="#e6edf3")
 
-        z_text = Text("ZOMBIE", style="bold red") if is_zombie else Text("NO", style="dim")
+        z_text = Text("ZOMBIE", style="bold #f85149") if is_zombie else Text("NO", style="dim")
 
         return (
             name_text,
@@ -164,18 +164,22 @@ class FleetTab(Widget):
 
         # 1. Header / Summary cards
         s_text = Text()
-        s_text.append("Archetype: ", style="bold")
-        s_text.append(f"{insight.archetype.value.upper()} ", style="bold magenta")
-        s_text.append("│ Spend: ", style="bold")
-        s_text.append(f"${insight.estimated_monthly_spend_usd:.0f}/mo ", style="bold green")
-        s_text.append("│ Waste: ", style="bold")
-        waste_style = "bold red" if insight.estimated_monthly_waste_usd > 0 else "bold green"
+        s_text.append("Archetype: ", style="#8b949e")
+        s_text.append(f"{insight.archetype.value.upper()} ", style="bold #bc8cff")
+        s_text.append("│ ", style="#30363d")
+        s_text.append("Spend: ", style="#8b949e")
+        s_text.append(f"${insight.estimated_monthly_spend_usd:.0f}/mo ", style="bold #3fb950")
+        s_text.append("│ ", style="#30363d")
+        s_text.append("Waste: ", style="#8b949e")
+        waste_style = "bold #f85149" if insight.estimated_monthly_waste_usd > 0 else "bold #3fb950"
         s_text.append(f"${insight.estimated_monthly_waste_usd:.0f}/mo ", style=waste_style)
-        s_text.append("│ Peak Burst: ", style="bold")
-        s_text.append(f"{insight.peak_burst_depth} ", style="bold yellow")
-        s_text.append("│ Recommended Size: ", style="bold")
-        s_text.append(f"{insight.recommended_fleet_size} ", style="bold cyan")
-        s_text.append(f"(current: {insight.total_accounts})", style="dim")
+        s_text.append("│ ", style="#30363d")
+        s_text.append("Peak Burst: ", style="#8b949e")
+        s_text.append(f"{insight.peak_burst_depth} ", style="bold #d29922")
+        s_text.append("│ ", style="#30363d")
+        s_text.append("Recommended Size: ", style="#8b949e")
+        s_text.append(f"{insight.recommended_fleet_size} ", style="bold #58a6ff")
+        s_text.append(f"(current: {insight.total_accounts})", style="#8b949e")
         summary.update(s_text)
 
         # 2. Recommendations panel

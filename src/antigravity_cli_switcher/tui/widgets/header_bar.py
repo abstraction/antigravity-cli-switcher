@@ -55,50 +55,59 @@ class HeaderBar(Widget):
             return
 
         text = Text()
-        text.append(" ACS ", style="bold black on green")
+        text.append(" ACS ", style="bold #ffffff on #21262d")
 
         active_label = self.active_account or "none"
-        active_style = "bold green" if self.active_account else "bold red"
-        mode_style = "bold magenta" if self.switch_mode == "auto" else "yellow"
+        active_style = "bold #3fb950" if self.active_account else "bold #f85149"
+        mode_style = "bold #bc8cff" if self.switch_mode == "auto" else "#d29922"
         width = self.size.width
 
-        backend_style = "bold cyan" if self.quota_backend == "http" else "bold yellow"
+        backend_style = "bold #58a6ff" if self.quota_backend == "http" else "bold #d29922"
+        sep_style = "#30363d"
+        lbl_style = "#8b949e"
+        val_style = "#e6edf3"
 
         if 0 < width < 55:
             # Ultra-compact mode for very narrow mobile screens
             text.append(f" {active_label} ", style=active_style)
-            text.append("│ ", style="dim")
+            text.append("│ ", style=sep_style)
             text.append(f"{self.quota_backend} ", style=backend_style)
-            text.append("│ ", style="dim")
+            text.append("│ ", style=sep_style)
             text.append(self.switch_mode, style=mode_style)
         elif 55 <= width < 90:
             # Compact mode for 80-column terminals
             text.append(f" {active_label} ", style=active_style)
-            text.append("│ ", style="dim")
+            text.append("│ ", style=sep_style)
             text.append(f"{self.switch_mode} ", style=mode_style)
-            text.append("│ ", style="dim")
+            text.append("│ ", style=sep_style)
             text.append(f"{self.quota_backend} ", style=backend_style)
-            text.append("│ ", style="dim")
-            text.append(f"{self.candidate_strategy} ", style="bold blue")
-            text.append("│ ", style="dim")
-            text.append(f"{self.refresh_interval}s ", style="cyan")
-            text.append("│ ", style="dim")
-            text.append(self.sort_mode, style="blue")
+            text.append("│ ", style=sep_style)
+            text.append(f"{self.candidate_strategy} ", style=val_style)
+            text.append("│ ", style=sep_style)
+            text.append(f"{self.refresh_interval}s ", style=val_style)
+            text.append("│ ", style=sep_style)
+            text.append(self.sort_mode, style=val_style)
         else:
             # Full verbose format
-            text.append(" Active: ", style="bold")
+            text.append(" Active: ", style=lbl_style)
             text.append(f"{active_label} ", style=active_style)
-            text.append("│ Accounts: ", style="dim")
-            text.append(f"{self.account_count} ", style="bold cyan")
-            text.append("│ Mode: ", style="dim")
+            text.append("│ ", style=sep_style)
+            text.append("Accounts: ", style=lbl_style)
+            text.append(f"{self.account_count} ", style=val_style)
+            text.append("│ ", style=sep_style)
+            text.append("Mode: ", style=lbl_style)
             text.append(f"{self.switch_mode} ", style=mode_style)
-            text.append("│ Quota: ", style="dim")
+            text.append("│ ", style=sep_style)
+            text.append("Quota: ", style=lbl_style)
             text.append(f"{self.quota_backend} ", style=backend_style)
-            text.append("│ Strategy: ", style="dim")
-            text.append(f"{self.candidate_strategy} ", style="bold blue")
-            text.append("│ Interval: ", style="dim")
-            text.append(f"{self.refresh_interval}s ", style="cyan")
-            text.append("│ Sort: ", style="dim")
-            text.append(self.sort_mode, style="blue")
+            text.append("│ ", style=sep_style)
+            text.append("Strategy: ", style=lbl_style)
+            text.append(f"{self.candidate_strategy} ", style=val_style)
+            text.append("│ ", style=sep_style)
+            text.append("Interval: ", style=lbl_style)
+            text.append(f"{self.refresh_interval}s ", style=val_style)
+            text.append("│ ", style=sep_style)
+            text.append("Sort: ", style=lbl_style)
+            text.append(self.sort_mode, style=val_style)
 
         content_static.update(text)

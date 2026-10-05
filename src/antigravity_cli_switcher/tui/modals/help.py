@@ -74,10 +74,10 @@ class HelpModal(ModalScreen[None]):
         ]
 
         for sec_title, items in sections:
-            t.append(f"\n{sec_title}\n", style="bold cyan")
+            t.append(f"\n{sec_title}\n", style="bold #58a6ff")
             for key, desc in items:
-                t.append(f"  {key:<12}", style="bold yellow")
-                t.append(f"{desc}\n", style="white")
+                t.append(f"  {key:<12}", style="bold #d29922")
+                t.append(f"{desc}\n", style="#e6edf3")
 
         return t
 

@@ -80,19 +80,20 @@ class DetailPanel(Widget):
         exp_email = meta.expected_email or "-"
 
         title_text = Text()
-        title_text.append("Overview: ", style="bold")
-        title_text.append(name, style="bold cyan")
-        title_text.append(" │ Health: ", style="dim")
+        title_text.append("Overview: ", style="bold #8b949e")
+        title_text.append(name, style="bold #58a6ff")
+        title_text.append(" │ ", style="#30363d")
+        title_text.append("Health: ", style="#8b949e")
         health_style = (
             "bold red reverse"
             if meta.health_status == HealthStatus.OAUTH_ROTATED
             else (
-                "bold green"
+                "bold #3fb950"
                 if meta.health_status in ("healthy", "ok", "ready")
                 else (
-                    "bold red"
+                    "bold #f85149"
                     if meta.health_status in ("ineligible", "auth_missing", "auth_expired")
-                    else "bold yellow"
+                    else "bold #d29922"
                 )
             )
         )
@@ -143,8 +144,8 @@ class DetailPanel(Widget):
                 compact_lines.append(("Min Head", min_hd_str))
 
             for k, v in compact_lines:
-                text.append(f"{k:<10}: ", style="dim bold")
-                text.append(f"{v}\n", style="white")
+                text.append(f"{k:<10}: ", style="#8b949e")
+                text.append(f"{v}\n", style="#e6edf3")
         else:
             # 2-column key-value presentation tightened to 71 cols
             lines = [
@@ -156,26 +157,28 @@ class DetailPanel(Widget):
                 ("Failures", str(meta.fail_count), "Problem", prob_str),
             ]
             for k1, v1, k2, v2 in lines:
-                text.append(f"{k1:<12}: ", style="dim bold")
-                text.append(f"{v1:<20} ", style="white")
-                text.append(f"│ {k2:<10}: ", style="dim bold")
-                text.append(f"{v2}\n", style="white")
+                text.append(f"{k1:<12}: ", style="#8b949e")
+                text.append(f"{v1:<20} ", style="#e6edf3")
+                text.append("│ ", style="#30363d")
+                text.append(f"{k2:<10}: ", style="#8b949e")
+                text.append(f"{v2}\n", style="#e6edf3")
 
             if utilization is not None:
-                text.append(f"{'7D Duty':<12}: ", style="dim bold")
-                text.append(f"{duty_str:<20} ", style="white")
-                text.append("│ Burnt     : ", style="dim bold")
-                text.append(f"{burnt_str} (Min Head: {min_hd_str})\n", style="white")
+                text.append(f"{'7D Duty':<12}: ", style="#8b949e")
+                text.append(f"{duty_str:<20} ", style="#e6edf3")
+                text.append("│ ", style="#30363d")
+                text.append(f"{'Burnt':<10}: ", style="#8b949e")
+                text.append(f"{burnt_str} (Min Head: {min_hd_str})\n", style="#e6edf3")
 
         if summary and summary != "Ready for use.":
-            text.append("Note      : ", style="bold yellow")
-            text.append(f"{summary}\n", style="yellow")
+            text.append("Note        : ", style="bold #d29922")
+            text.append(f"{summary}\n", style="#d29922")
 
         if rec == "human_intervention":
-            text.append("Action    : ", style="bold red")
-            text.append("Requires human intervention. Verify in browser or switch account.\n", style="bold red")
+            text.append("Action      : ", style="bold #f85149")
+            text.append("Requires human intervention. Verify in browser or switch account.\n", style="bold #f85149")
         elif rec == "relogin":
-            text.append("Action    : ", style="bold magenta")
-            text.append("Press 'l' to relogin / fix this account.\n", style="bold magenta")
+            text.append("Action      : ", style="bold #bc8cff")
+            text.append("Press 'l' to relogin / fix this account.\n", style="bold #bc8cff")
 
         content_static.update(text)

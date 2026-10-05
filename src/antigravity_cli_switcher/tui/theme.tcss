@@ -32,8 +32,9 @@ Tabs {
     dock: top;
     height: 1;
     min-height: 1;
-    background: #0d1117;
+    background: #161b22;
     border: none;
+    border-bottom: solid #21262d;
     padding: 0;
     margin: 0;
 }
@@ -50,13 +51,14 @@ Tab {
 
 Tab:hover {
     color: #f0f6fc;
-    background: #161b22;
+    background: #21262d;
 }
 
 Tab.-active {
     color: #58a6ff;
     text-style: bold;
-    background: #161b22;
+    background: #0d1117;
+    border-bottom: solid #58a6ff;
 }
 
 Tabs Underline {
@@ -145,13 +147,25 @@ ProxyTab, HygieneTab, HistoryTab, LogsTab, FleetTab {
     color: #e6edf3;
 }
 
-#fleet-summary, #fleet-recommendation {
+#fleet-summary {
     height: auto;
     min-height: 1;
     max-height: 2;
     background: #161b22;
     border: none;
     border-bottom: solid #21262d;
+    padding: 0 1;
+    margin: 0;
+    color: #e6edf3;
+}
+
+#fleet-recommendation {
+    height: auto;
+    min-height: 1;
+    max-height: 2;
+    background: #161b22;
+    border: none;
+    border-top: solid #21262d;
     padding: 0 1;
     margin: 0;
     color: #e6edf3;
@@ -198,12 +212,13 @@ ProxyTab, HygieneTab, HistoryTab, LogsTab, FleetTab {
 }
 
 #proxy-actions, #hygiene-actions {
-    height: 3;
+    height: 1;
+    min-height: 1;
     align: right middle;
     margin: 0;
     padding: 0 1;
     background: #161b22;
-    border-top: solid #21262d;
+    border: none;
 }
 
 #proxy-actions Button, #hygiene-actions Button {
@@ -251,12 +266,95 @@ ProxyTab, HygieneTab, HistoryTab, LogsTab, FleetTab {
     padding: 0 1;
 }
 
+/* Global Interactive Controls */
+Button {
+    height: 1;
+    min-height: 1;
+    border: none;
+    padding: 0 2;
+    background: #21262d;
+    color: #c9d1d9;
+}
+
+Button:hover {
+    background: #30363d;
+    color: #ffffff;
+}
+
+Button:focus {
+    background: #1f6feb;
+    color: #ffffff;
+    text-style: bold;
+}
+
+Button.-primary {
+    background: #238636;
+    color: #ffffff;
+}
+
+Button.-primary:hover {
+    background: #2ea043;
+}
+
+Button.-error {
+    background: #da3633;
+    color: #ffffff;
+}
+
+Button.-error:hover {
+    background: #f85149;
+}
+
+Button.-warning {
+    background: #9e6a03;
+    color: #ffffff;
+}
+
+Button.-warning:hover {
+    background: #bb8009;
+}
+
+Input {
+    height: 1;
+    min-height: 1;
+    border: none;
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 0 1;
+}
+
+Input:focus {
+    background: #161b22;
+    color: #ffffff;
+}
+
+Select {
+    height: 1;
+    min-height: 1;
+    border: none;
+    background: #21262d;
+    color: #e6edf3;
+}
+
 /* Bottom Bar: Unified Footer and Status */
 #bottom-container {
     dock: bottom;
     height: auto;
     background: #161b22;
     border-top: solid #21262d;
+}
+
+StatusBar {
+    dock: none;
+    height: 1;
+    min-height: 1;
+    background: transparent;
+    color: #8b949e;
+    padding: 0 1;
+}
+
+#status-message {
+    color: #8b949e;
 }
 
 Footer {
@@ -277,17 +375,13 @@ Footer > .footer--description {
     color: #8b949e;
 }
 
-StatusBar {
-    dock: none;
-    height: 1;
-    min-height: 1;
-    background: transparent;
-    color: #8b949e;
-    padding: 0 1;
+Footer > .footer--highlight {
+    background: #30363d;
 }
 
-#status-message {
-    color: #e6edf3;
+Footer > .footer--highlight-key {
+    background: #1f6feb;
+    color: #ffffff;
 }
 
 /* Modals */
@@ -327,7 +421,8 @@ ModalScreen {
 .modal-buttons {
     margin-top: 1;
     align: right middle;
-    height: 3;
+    height: 1;
+    min-height: 1;
 }
 
 .modal-buttons Button {
