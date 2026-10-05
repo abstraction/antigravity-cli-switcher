@@ -54,27 +54,7 @@ class FleetTab(Widget):
         yield Static("Recommendations: loading...", id="fleet-recommendation")
 
     def on_mount(self) -> None:
-        summary = self.query_one("#fleet-summary", Static)
-        summary.tooltip = (
-            "Fleet metrics:\n"
-            "• Archetype: 7-day usage pattern\n"
-            "• Spend: Total monthly account cost\n"
-            "• Waste: Monthly cost of idle accounts\n"
-            "• Peak Burst: Peak concurrent active accounts\n"
-            "• Recommended Size: Account count needed for peak burst"
-        )
-        legend = self.query_one("#fleet-legend", Static)
-        legend.tooltip = (
-            "Metrics:\n"
-            "• Peak Burst: Max concurrent accounts active during load\n"
-            "• Burnt %: Total quota percentage consumed over 7 days\n"
-            "• Min Headroom %: Lowest recorded quota percentage before reset\n"
-            "• Zombie: Accounts with 0% duty cycle and 0% quota consumed"
-        )
-        rec = self.query_one("#fleet-recommendation", Static)
-        rec.tooltip = "Fleet recommendation based on trailing utilization."
         table = self.query_one("#fleet-table", DataTable)
-        table.tooltip = "Account duty cycles, quota consumption, and zombie status."
         table.add_column("Account", key="account", width=12)
         table.add_column("Status", key="status", width=7)
         table.add_column("7D Duty %", key="duty", width=9)

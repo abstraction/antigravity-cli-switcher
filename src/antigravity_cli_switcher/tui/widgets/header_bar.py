@@ -48,9 +48,6 @@ class HeaderBar(Widget):
     def on_resize(self, event: events.Resize) -> None:
         self._refresh_content()
 
-    def on_mount(self) -> None:
-        self.tooltip = "Status: Active account, switch mode, quota backend, and sync interval."
-
     def _refresh_content(self) -> None:
         try:
             content_static = self.query_one("#header-content", Static)

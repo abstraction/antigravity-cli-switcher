@@ -49,14 +49,6 @@ class HygieneTab(Widget):
 
     def on_mount(self) -> None:
         table = self.query_one("#hygiene-table", DataTable)
-        table.tooltip = "Hygiene audit: Token integrity and credential expiration."
-        btn_fix = self.query_one("#btn-hygiene-fix", Button)
-        btn_fix.tooltip = "Repair contaminated tokens and stale state."
-        btn_rel = self.query_one("#btn-hygiene-relogin", Button)
-        btn_rel.tooltip = "Re-authenticate selected account."
-        btn_ref = self.query_one("#btn-hygiene-refresh", Button)
-        btn_ref.tooltip = "Re-scan accounts and verify session tokens."
-
         table.add_column("Account", key="account", width=14)
         table.add_column("Status", key="status", width=8)
         table.add_column("Action", key="action", width=8)

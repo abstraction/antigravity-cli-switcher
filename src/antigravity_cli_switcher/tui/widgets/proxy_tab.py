@@ -54,11 +54,6 @@ class ProxyTab(Widget):
 
     def on_mount(self) -> None:
         table = self.query_one("#proxy-table", DataTable)
-        table.tooltip = "Account proxy routes and latency."
-        self.query_one("#btn-proxy-edit", Button).tooltip = "Configure proxy address."
-        self.query_one("#btn-proxy-toggle", Button).tooltip = "Toggle proxy on or off."
-        self.query_one("#btn-proxy-clear", Button).tooltip = "Remove proxy configuration."
-        self.query_one("#btn-proxy-test", Button).tooltip = "Test proxy latency and connectivity."
         table.add_column("Sel", key="sel", width=3)
         table.add_column("Account", key="account", width=16)
         table.add_column("State", key="state", width=8)

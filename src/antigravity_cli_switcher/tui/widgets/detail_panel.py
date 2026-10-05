@@ -46,9 +46,6 @@ class DetailPanel(Widget):
         yield Static("Overview", id="detail-title")
         yield Static(id="detail-content")
 
-    def on_mount(self) -> None:
-        self.tooltip = "Account details: press 'o' to toggle. Shows credentials, quota windows, and diagnostics."
-
     def on_resize(self, event: events.Resize) -> None:
         if self._last_name and self._last_meta:
             self.update_detail(self._last_name, self._last_meta, self._last_ver, self._last_util)
