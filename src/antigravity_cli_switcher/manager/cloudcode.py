@@ -7,8 +7,13 @@ import ssl
 import subprocess
 import urllib.request
 from collections.abc import Mapping
+from pathlib import Path
 
-from antigravity_cli_switcher.manager.paths import resolve_agy_binary
+from antigravity_cli_switcher.manager.paths import (
+    _project_id_path,
+    _read_text_if_exists,
+    resolve_agy_binary,
+)
 from antigravity_cli_switcher.manager.state import (
     USAGE_FAMILY_NAMES,
     _default_usage_families,
@@ -243,6 +248,28 @@ def _parse_quota_windows_from_summary(
     return families["gemini"]["short"], families["gemini"]["weekly"], bucket_count
 
 
+def _persist_project_id(home_root: Path, project_id: str | None) -> None:
+    if not project_id:
+        return
+    path = _project_id_path(home_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(project_id.strip() + "\n", encoding="utf-8")
+
+
+def _extract_project_id(load_response: Mapping[str, object], home_root: Path) -> str | None:
+    project = load_response.get("cloudaicompanionProject")
+    if isinstance(project, str) and project.strip():
+        _persist_project_id(home_root, project.strip())
+        return project.strip()
+    if isinstance(project, dict):
+        project_id = project.get("id")
+        if isinstance(project_id, str) and project_id.strip():
+            _persist_project_id(home_root, project_id.strip())
+            return project_id.strip()
+    cached = _read_text_if_exists(_project_id_path(home_root))
+    return cached.strip() if isinstance(cached, str) and cached.strip() else None
+
+
 __all__ = [
     "CODE_ASSIST_BASE_URL",
     "CODE_ASSIST_LOAD_PATH",
@@ -251,11 +278,13 @@ __all__ = [
     "CODE_ASSIST_USER_AGENT",
     "GOOGLE_USERINFO_URL",
     "_cloudcode_request",
+    "_extract_project_id",
     "_google_userinfo_request",
     "_parse_model_label",
     "_parse_quota_families_from_summary",
     "_parse_quota_windows_from_summary",
     "_parse_summary_bucket",
+    "_persist_project_id",
     "_quota_group_family",
     "_select_quota_summary_group",
     "format_plan_type_compact",

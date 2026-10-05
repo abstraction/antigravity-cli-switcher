@@ -263,11 +263,15 @@ def load_state(paths: ManagerPaths) -> dict:
     data["switch_policy"] = _normalize_switch_policy(data.get("switch_policy"))
     data["switch_runtime"] = _normalize_switch_runtime(data.get("switch_runtime"))
     data["switch_history"] = _normalize_switch_history(data.get("switch_history"))
+    data.setdefault("fleet_utilization", {})
 
     return data
 
 
 def save_state(paths: ManagerPaths, state: dict) -> None:
+    from antigravity_cli_switcher.manager.utilization import reconcile_active_duty
+
+    reconcile_active_duty(state)
     fd, temp_path = tempfile.mkstemp(dir=paths.state_file.parent, prefix=paths.state_file.name + "_", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -326,6 +330,16 @@ def sync_state_from_disk(paths: ManagerPaths, state: dict) -> dict:
             tracked.pop(name, None)
             if state.get("active") == name:
                 state["active"] = None
+
+    fleet_util = state.setdefault("fleet_utilization", {})
+    if isinstance(fleet_util, dict):
+        fleet_accounts = fleet_util.get("accounts")
+        if isinstance(fleet_accounts, dict):
+            for name in list(fleet_accounts):
+                if name not in disk_accounts:
+                    fleet_accounts.pop(name, None)
+        if fleet_util.get("last_active_account") not in disk_accounts:
+            fleet_util["last_active_account"] = ""
 
     active = state.get("active")
     for name, meta in tracked.items():

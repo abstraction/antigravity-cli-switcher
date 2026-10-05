@@ -560,3 +560,51 @@ async def test_dashboard_relogin_submission_flow(temp_paths: ManagerPaths, monke
         assert len(saved_calls) == 1
         assert saved_calls[0][0] == "alpha"
         assert saved_calls[0][2] is True  # overwrite_existing
+
+
+def test_dashboard_footer_bindings_copywriting() -> None:
+    from textual.binding import Binding
+
+    bindings = [b for b in DashboardScreen.BINDINGS if isinstance(b, Binding)]
+    binding_map = {b.key: b for b in bindings}
+    assert binding_map["enter"].description == "Switch"
+    assert binding_map["e"].description == "Enable"
+    assert binding_map["e"].show is True
+
+
+@pytest.mark.asyncio
+async def test_dashboard_activate_auto_enables_disabled_account(
+    temp_paths: ManagerPaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot, verification = create_sample_snapshot()
+    # Mark beta as disabled
+    snapshot.accounts["beta"].enabled = False
+
+    monkeypatch.setattr(
+        "antigravity_cli_switcher.tui.app.fetch_snapshot_data",
+        lambda paths: (snapshot, verification),
+    )
+    enabled_calls: list[tuple[str, bool]] = []
+    switched_calls: list[str] = []
+
+    def mock_set_enabled(paths: ManagerPaths, name: str, enabled: bool) -> None:
+        enabled_calls.append((name, enabled))
+
+    def mock_switch_account(paths: ManagerPaths, name: str) -> str:
+        switched_calls.append(name)
+        return name
+
+    monkeypatch.setattr("antigravity_cli_switcher.tui.screens.dashboard_actions.set_enabled", mock_set_enabled)
+    monkeypatch.setattr("antigravity_cli_switcher.tui.screens.dashboard.switch_account", mock_switch_account)
+
+    app = ACSApp(paths=temp_paths)
+    async with app.run_test() as pilot:
+        screen = pilot.app.screen
+        assert isinstance(screen, DashboardScreen)
+        await pilot.pause()
+
+        screen.action_activate("beta")
+        await pilot.pause()
+
+        assert ("beta", True) in enabled_calls
+        assert "beta" in switched_calls

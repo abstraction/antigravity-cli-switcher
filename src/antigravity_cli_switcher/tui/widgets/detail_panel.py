@@ -10,7 +10,12 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
-from antigravity_cli_switcher.models import AccountMeta, AccountVerification, HealthStatus
+from antigravity_cli_switcher.models import (
+    AccountMeta,
+    AccountUtilizationRecord,
+    AccountVerification,
+    HealthStatus,
+)
 from antigravity_cli_switcher.tui.formatters import (
     format_next_refresh,
     format_problem_summary,
@@ -33,6 +38,7 @@ class DetailPanel(Widget):
         self._last_name: str | None = None
         self._last_meta: AccountMeta | None = None
         self._last_ver: AccountVerification | None = None
+        self._last_util: AccountUtilizationRecord | None = None
 
     def compose(self) -> ComposeResult:
         yield Static("Overview", id="detail-title")
@@ -40,18 +46,20 @@ class DetailPanel(Widget):
 
     def on_resize(self, event: events.Resize) -> None:
         if self._last_name and self._last_meta:
-            self.update_detail(self._last_name, self._last_meta, self._last_ver)
+            self.update_detail(self._last_name, self._last_meta, self._last_ver, self._last_util)
 
     def update_detail(
         self,
         name: str | None,
         meta: AccountMeta | None,
         verification: AccountVerification | None,
+        utilization: AccountUtilizationRecord | None = None,
     ) -> None:
         """Update the panel contents for the given account."""
         self._last_name = name
         self._last_meta = meta
         self._last_ver = verification
+        self._last_util = utilization
 
         title_static = self.query_one("#detail-title", Static)
         content_static = self.query_one("#detail-content", Static)
@@ -102,6 +110,19 @@ class DetailPanel(Widget):
         text = Text()
         width = self.size.width
 
+        duty_str = ""
+        burnt_str = ""
+        min_hd_str = ""
+        if utilization is not None:
+            act_sec = utilization.rolling_7d_active_seconds
+            duty_pct = round((act_sec / 604800.0) * 100.0, 1)
+            g_cons = round(utilization.rolling_7d_gemini_consumed)
+            o_cons = round(utilization.rolling_7d_other_consumed)
+            min_hd = round(min(utilization.rolling_7d_min_gemini_headroom, utilization.rolling_7d_min_other_headroom))
+            duty_str = f"{duty_pct}%"
+            burnt_str = f"G:{g_cons}% O:{o_cons}%"
+            min_hd_str = f"{min_hd}%"
+
         if 0 < width < 75:
             # Single-column compact presentation for narrow screens
             compact_lines = [
@@ -117,6 +138,10 @@ class DetailPanel(Widget):
                 ("Problem", prob_str),
                 ("Status", f"{status_str} (fails: {meta.fail_count})"),
             ]
+            if utilization is not None:
+                compact_lines.append(("7D Duty", f"{duty_str} (burnt {burnt_str})"))
+                compact_lines.append(("Min Head", min_hd_str))
+
             for k, v in compact_lines:
                 text.append(f"{k:<10}: ", style="dim bold")
                 text.append(f"{v}\n", style="white")
@@ -135,6 +160,17 @@ class DetailPanel(Widget):
                 text.append(f"{v1:<20} ", style="white")
                 text.append(f"│ {k2:<10}: ", style="dim bold")
                 text.append(f"{v2}\n", style="white")
+
+            if utilization is not None:
+                text.append(f"{'7D Duty':<12}: ", style="dim bold")
+                text.append(f"{duty_str:<20} ", style="white")
+                text.append("│ Burnt     : ", style="dim bold")
+                text.append(f"{burnt_str} (Min Head: {min_hd_str})\n", style="white")
+
+        if utilization is not None and utilization.is_zombie:
+            waste = int(utilization.monthly_cost_usd)
+            text.append("⚠️  ZOMBIE  : ", style="bold red")
+            text.append(f"0% quota used in 7 days (${waste}/mo waste)\n", style="bold red")
 
         if summary and summary != "Ready for use.":
             text.append("Note      : ", style="bold yellow")

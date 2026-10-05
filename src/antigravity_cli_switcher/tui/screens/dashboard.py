@@ -53,13 +53,13 @@ class DashboardScreen(DashboardActionsScreenBase):
         Binding("right", "next_tab", "Next Tab", show=False, priority=True),
         Binding("[", "prev_tab", "Prev Tab", show=False),
         Binding("]", "next_tab", "Next Tab", show=False),
-        Binding("enter", "activate", "Activate"),
-        Binding("a", "activate", "Activate", show=False),
+        Binding("enter", "activate", "Switch"),
+        Binding("a", "activate", "Switch", show=False),
         Binding("l", "relogin", "Relogin"),
         Binding("n", "new_login", "New", show=False),
         Binding("i", "import_profile", "Import", show=False),
         Binding("r", "switch_next", "Next"),
-        Binding("e", "toggle_enabled", "Toggle", show=False),
+        Binding("e", "toggle_enabled", "Enable", show=True),
         Binding("c", "clear_bad", "Clear", show=False),
         Binding("m", "mark_bad", "Flag", show=False),
         Binding("f2", "rename", "Rename", show=False),
@@ -214,9 +214,14 @@ class DashboardScreen(DashboardActionsScreenBase):
         if name and name in self.snapshot.accounts:
             meta = self.snapshot.accounts[name]
             ver = self.verification.accounts.get(name) if self.verification else None
-            detail.update_detail(name, meta, ver)
+            util = (
+                self.snapshot.fleet_utilization.accounts.get(name)
+                if self.snapshot.fleet_utilization and name in self.snapshot.fleet_utilization.accounts
+                else None
+            )
+            detail.update_detail(name, meta, ver, util)
         else:
-            detail.update_detail(None, None, None)
+            detail.update_detail(None, None, None, None)
 
     def _selected_account_name(self) -> str | None:
         tabs = self.query_one("#main-tabs", TabbedContent)

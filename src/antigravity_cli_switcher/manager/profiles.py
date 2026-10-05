@@ -188,6 +188,14 @@ def rename_account(paths: ManagerPaths, old_name: str, new_name: str) -> None:
         if state.get("active") == old_name:
             state["active"] = new_name
 
+        fleet_util = state.get("fleet_utilization")
+        if isinstance(fleet_util, dict):
+            fleet_accounts = fleet_util.get("accounts")
+            if isinstance(fleet_accounts, dict) and old_name in fleet_accounts:
+                fleet_accounts[new_name] = fleet_accounts.pop(old_name)
+            if fleet_util.get("last_active_account") == old_name:
+                fleet_util["last_active_account"] = new_name
+
         save_state(paths, state)
 
 
@@ -204,6 +212,14 @@ def delete_account(paths: ManagerPaths, name: str) -> bool:
         del state["accounts"][name]
         if was_active:
             state["active"] = None
+
+        fleet_util = state.get("fleet_utilization")
+        if isinstance(fleet_util, dict):
+            fleet_accounts = fleet_util.get("accounts")
+            if isinstance(fleet_accounts, dict):
+                fleet_accounts.pop(name, None)
+            if fleet_util.get("last_active_account") == name:
+                fleet_util["last_active_account"] = ""
 
         save_state(paths, state)
 
