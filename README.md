@@ -8,7 +8,7 @@
   </p>
   <p>Active-standby account manager and quota failover switcher for Antigravity CLI on Linux</p>
   <p>
-    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-259%20passed-2ea043" alt="Tests"></a>
+    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-261%20passed-2ea043" alt="Tests"></a>
     <a href="https://github.com/abstraction/antigravity-cli-switcher"><img src="https://img.shields.io/badge/python-3.10+-3776ab" alt="Python"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   </p>
@@ -37,7 +37,7 @@ On Linux, `agy` stores OAuth credentials directly in the global FreeDesktop Secr
 * **OS keyring isolation.** Protects the active session credential while background processes check quotas or probe standby profiles.
 * **Independent quota windows.** Evaluates `gemini-5h`, `gemini-weekly`, `other-5h`, and `other-weekly` quotas separately.
 * **Configurable candidate ranking.** Selects standby accounts using `squeeze`, `highest-short`, or `round-robin` strategies.
-* **Interactive Textual TUI.** Five operational tabs (Accounts, Hygiene, History, Logs, Proxies) with keyboard navigation and modal dialogs.
+* **Interactive Textual TUI.** Six operational tabs (Accounts, Fleet, Logs, History, Hygiene, Proxies) with keyboard navigation and modal dialogs.
 * **Per-account proxy routing.** Assigns independent HTTP, HTTPS, or SOCKS5 proxies to individual accounts.
 * **Credential hygiene engine.** Audits stored profiles, detects expired tokens, and flags file corruptions with automated repair commands.
 * **Multi-backend quota polling.** Direct CloudCode HTTP engine (default, ~0.4s) avoids machine telemetry and keyring flapping. Native CLI wrapper executes inside isolated keyring buffers.

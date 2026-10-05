@@ -28,7 +28,7 @@ class HelpModal(ModalScreen[None]):
             yield Static("Keyboard Shortcuts Reference", classes="modal-title")
             yield Static(self._build_help_text(), id="help-content")
             with Horizontal(classes="modal-buttons"):
-                yield Button("Close (Esc)", id="btn-close", variant="primary")
+                yield Button("Close (Esc)", id="btn-close", variant="default")
 
     def _build_help_text(self) -> Text:
         t = Text()
@@ -78,6 +78,19 @@ class HelpModal(ModalScreen[None]):
             for key, desc in items:
                 t.append(f"  {key:<12}", style="bold #d29922")
                 t.append(f"{desc}\n", style="#e6edf3")
+
+        t.append("\nMetrics & Terminology Glossary\n", style="bold #58a6ff")
+        glossary: list[tuple[str, str]] = [
+            ("Peak Burst", "Maximum concurrent active accounts burning quota simultaneously"),
+            ("Gemini/Claude Burnt %", "Percentage of quota consumed across rolling 7-day window"),
+            ("Eff %", "Effective quota score based on bottleneck model (Gemini or Claude)"),
+            ("(S/W)", "Short (5-hour) and Weekly (7-day) quota window indicators"),
+            ("Min Headroom %", "Lowest remaining quota safety margin before rate limit triggers"),
+            ("Zombie Flag", "Paid account ($20/mo) with 0% 7-day duty cycle"),
+        ]
+        for term, explanation in glossary:
+            t.append(f"  {term:<23}", style="bold #bc8cff")
+            t.append(f"{explanation}\n", style="#e6edf3")
 
         return t
 

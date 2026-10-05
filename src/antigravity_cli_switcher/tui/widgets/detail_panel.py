@@ -44,6 +44,11 @@ class DetailPanel(Widget):
         yield Static("Overview", id="detail-title")
         yield Static(id="detail-content")
 
+    def on_mount(self) -> None:
+        self.tooltip = (
+            "Account Inspection Panel: Press 'o' to toggle. Shows token verification, quota windows, and diagnostics."
+        )
+
     def on_resize(self, event: events.Resize) -> None:
         if self._last_name and self._last_meta:
             self.update_detail(self._last_name, self._last_meta, self._last_ver, self._last_util)
@@ -76,8 +81,16 @@ class DetailPanel(Widget):
         )
         rec = verification.recommended_action if verification else "none"
         summary = verification.summary if verification else "Ready for use."
-        tok_email = meta.identity.email if meta.identity and meta.identity.email else "-"
-        exp_email = meta.expected_email or "-"
+        tok_email = (
+            (meta.identity.email if meta.identity and meta.identity.email else None)
+            or (verification.token_email if verification and verification.token_email else None)
+            or "-"
+        )
+        exp_email = (
+            meta.expected_email
+            or (verification.expected_email if verification and verification.expected_email else None)
+            or "-"
+        )
 
         title_text = Text()
         title_text.append("Overview: ", style="bold #8b949e")
@@ -98,6 +111,7 @@ class DetailPanel(Widget):
             )
         )
         title_text.append(str(meta.health_status), style=health_style)
+        title_text.append("  [o: toggle]", style="#8b949e")
         title_static.update(title_text)
 
         gemini_5h = format_window_summary(meta, "short", now, "gemini")
@@ -157,15 +171,17 @@ class DetailPanel(Widget):
                 ("Failures", str(meta.fail_count), "Problem", prob_str),
             ]
             for k1, v1, k2, v2 in lines:
+                disp_v1 = v1 if len(v1) <= 20 else v1[:19] + "…"
                 text.append(f"{k1:<12}: ", style="#8b949e")
-                text.append(f"{v1:<20} ", style="#e6edf3")
+                text.append(f"{disp_v1:<20} ", style="#e6edf3")
                 text.append("│ ", style="#30363d")
                 text.append(f"{k2:<10}: ", style="#8b949e")
                 text.append(f"{v2}\n", style="#e6edf3")
 
             if utilization is not None:
+                disp_duty = duty_str if len(duty_str) <= 20 else duty_str[:19] + "…"
                 text.append(f"{'7D Duty':<12}: ", style="#8b949e")
-                text.append(f"{duty_str:<20} ", style="#e6edf3")
+                text.append(f"{disp_duty:<20} ", style="#e6edf3")
                 text.append("│ ", style="#30363d")
                 text.append(f"{'Burnt':<10}: ", style="#8b949e")
                 text.append(f"{burnt_str} (Min Head: {min_hd_str})\n", style="#e6edf3")

@@ -36,16 +36,16 @@ from antigravity_cli_switcher.tui.usage_scoring import (
 
 COLUMN_CONFIG: Final[dict[str, tuple[str, int]]] = {
     "sel": ("Sel", 3),
-    "name": ("Account", 16),
-    "state": ("State", 8),
-    "plan": ("Plan", 6),
+    "name": ("Account", 14),
+    "state": ("State", 7),
+    "plan": ("Plan", 5),
     "health": ("Health", 6),
     "eff": ("Eff %", 5),
-    "gemini": ("Gemini (S/W)", 12),
-    "claude": ("Claude (S/W)", 12),
-    "reset": ("Reset (S/W)", 16),
+    "gemini": ("Gemini S/W", 10),
+    "claude": ("Claude S/W", 10),
+    "reset": ("Reset (S/W)", 17),
     "next": ("Next", 8),
-    "error": ("Last Error", 14),
+    "error": ("Last Error", 10),
 }
 
 ALL_COL_KEYS: Final[list[str]] = [
@@ -113,7 +113,7 @@ class AccountTable(DataTable[Text | str]):
     def _get_column_keys_for_width(self, width: int) -> list[str]:
         if 0 < width < 75:
             return MOBILE_COL_KEYS
-        if 75 <= width < 105:
+        if 75 <= width < 118:
             return COMPACT_COL_KEYS
         return ALL_COL_KEYS
 
@@ -125,6 +125,14 @@ class AccountTable(DataTable[Text | str]):
         self._current_col_keys = list(col_keys)
 
     def on_mount(self) -> None:
+        self.tooltip = (
+            "Accounts Table:\n"
+            "• Eff %: Effective quota score based on bottleneck model\n"
+            "• (S/W): Short (5h) and Weekly (7d) quota % remaining\n"
+            "• Reset (S/W): Time until short (5h) and weekly quota replenish\n"
+            "• Next: Scheduled time for next live background check\n"
+            "Keys: [Enter] Switch · [u] Quota · [l] Relogin · [e] Enable · [o] Details · [?] Help"
+        )
         target_keys = self._get_column_keys_for_width(self.size.width)
         self._setup_columns(target_keys)
 

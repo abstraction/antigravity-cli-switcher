@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.coordinate import Coordinate
 from textual.widget import Widget
@@ -40,6 +41,10 @@ class FleetTab(Widget):
 
     def compose(self) -> ComposeResult:
         yield Static("Fleet summary: loading...", id="fleet-summary")
+        yield Static(
+            "[bold #58a6ff](i)[/]  Peak Burst: max concurrent active accounts │ Burnt %: 7d quota consumed │ Zombie: 0% 7d usage",
+            id="fleet-legend",
+        )
         table: DataTable[Text | str] = DataTable(
             id="fleet-table",
             cursor_type="row",
@@ -49,15 +54,75 @@ class FleetTab(Widget):
         yield Static("Recommendations: loading...", id="fleet-recommendation")
 
     def on_mount(self) -> None:
+        summary = self.query_one("#fleet-summary", Static)
+        summary.tooltip = (
+            "Fleet Sizing & Concurrency:\n"
+            "• Archetype: Usage pattern classification over rolling 7 days\n"
+            "• Spend: Total estimated monthly cost ($20/mo per Pro account)\n"
+            "• Waste: Cost of idle or zombie accounts that could be retired\n"
+            "• Peak Burst: Maximum accounts actively burning quota concurrently\n"
+            "• Recommended Size: Optimal fleet size to meet peak load without waste"
+        )
+        legend = self.query_one("#fleet-legend", Static)
+        legend.tooltip = (
+            "Metric Explanations:\n"
+            "• Peak Burst: Max concurrent accounts in use during load bursts\n"
+            "• Gemini/Claude Burnt %: Quota percentage consumed over 7 days\n"
+            "• Min Headroom %: Lowest remaining quota safety margin before rate limit\n"
+            "• Zombie Flag: Accounts paying $20/mo with 0% 7-day usage"
+        )
+        rec = self.query_one("#fleet-recommendation", Static)
+        rec.tooltip = "Rightsizing Guidance: Automated recommendation to optimize seat count and subagent throughput."
         table = self.query_one("#fleet-table", DataTable)
-        table.add_column("Account", key="account", width=18)
-        table.add_column("Status", key="status", width=10)
-        table.add_column("7D Duty %", key="duty", width=11)
-        table.add_column("Gemini Burnt %", key="gemini_burnt", width=15)
-        table.add_column("Claude Burnt %", key="claude_burnt", width=15)
-        table.add_column("Min Headroom %", key="min_headroom", width=15)
-        table.add_column("Monthly Cost", key="cost", width=13)
-        table.add_column("Zombie Flag", key="zombie", width=12)
+        table.tooltip = "Fleet Table: Highlights account-level duty cycles, quota burn rates, and zombie flags."
+        table.add_column("Account", key="account", width=12)
+        table.add_column("Status", key="status", width=7)
+        table.add_column("7D Duty %", key="duty", width=9)
+        table.add_column("Gemini Burnt %", key="gemini_burnt", width=14)
+        table.add_column("Claude Burnt %", key="claude_burnt", width=14)
+        table.add_column("Min Headroom %", key="min_headroom", width=14)
+        table.add_column("Monthly Cost", key="cost", width=12)
+        table.add_column("Zombie Flag", key="zombie", width=11)
+        self._adjust_column_widths(self.size.width)
+
+    def on_resize(self, event: events.Resize) -> None:
+        self._adjust_column_widths(event.size.width)
+        if self.snapshot is not None:
+            self.update_fleet(self.snapshot)
+
+    def _adjust_column_widths(self, width: int) -> None:
+        try:
+            table = self.query_one("#fleet-table", DataTable)
+        except Exception:
+            return
+        if not table.columns:
+            return
+        if 0 < width < 112:
+            widths = {
+                "account": 10 if width < 98 else 11,
+                "status": 6,
+                "duty": 8,
+                "gemini_burnt": 10 if width < 98 else 12,
+                "claude_burnt": 10 if width < 98 else 12,
+                "min_headroom": 10 if width < 98 else 12,
+                "cost": 8 if width < 98 else 10,
+                "zombie": 8 if width < 98 else 10,
+            }
+        else:
+            widths = {
+                "account": 12,
+                "status": 7,
+                "duty": 9,
+                "gemini_burnt": 14,
+                "claude_burnt": 14,
+                "min_headroom": 14,
+                "cost": 12,
+                "zombie": 11,
+            }
+        for col_key, col in table.columns.items():
+            key_val = str(col_key.value) if col_key and col_key.value is not None else ""
+            if key_val in widths:
+                col.width = widths[key_val]
 
     @property
     def acs_app(self) -> ACSApp:
@@ -163,6 +228,7 @@ class FleetTab(Widget):
         insight: FleetInsight = compute_fleet_insight(state_dict)
 
         # 1. Header / Summary cards
+        width = self.size.width
         s_text = Text()
         s_text.append("Archetype: ", style="#8b949e")
         s_text.append(f"{insight.archetype.value.upper()} ", style="bold #bc8cff")
@@ -179,23 +245,31 @@ class FleetTab(Widget):
         s_text.append("│ ", style="#30363d")
         s_text.append("Recommended Size: ", style="#8b949e")
         s_text.append(f"{insight.recommended_fleet_size} ", style="bold #58a6ff")
-        s_text.append(f"(current: {insight.total_accounts})", style="#8b949e")
+        if width <= 0 or width >= 105:
+            s_text.append(f"(current: {insight.total_accounts})", style="#8b949e")
+        elif width >= 90:
+            s_text.append(f"(cur: {insight.total_accounts})", style="#8b949e")
         summary.update(s_text)
 
         # 2. Recommendations panel
         r_text = Text()
-        r_text.append("Recommendation: ", style="bold yellow")
+        r_text.append("Recommendation: ", style="bold #d29922")
         r_text.append(
             insight.recommendation_summary or "Fleet capacity is well-matched to current workload.",
-            style="white",
+            style="#e6edf3",
         )
         if insight.workload_ramp_viable and insight.archetype != FleetArchetype.QUOTA_GRINDER:
-            r_text.append(" │ Safe to ramp off-peak subagent workloads", style="bold green")
+            extra = " │ Safe to ramp off-peak subagent workloads"
+            if width <= 0 or r_text.cell_len + len(extra) < width - 2:
+                r_text.append(extra, style="bold #3fb950")
         if insight.potential_annual_savings_usd > 0:
-            r_text.append(f" │ Potential savings: ${insight.potential_annual_savings_usd:.0f}/yr", style="bold green")
+            extra = f" │ Potential savings: ${insight.potential_annual_savings_usd:.0f}/yr"
+            if width <= 0 or r_text.cell_len + len(extra) < width - 2:
+                r_text.append(extra, style="bold #3fb950")
         recommendation.update(r_text)
 
         # 3. Accounts table
+        self._adjust_column_widths(width)
         fleet_dict = state_dict.get("fleet_utilization")
         raw_accounts = fleet_dict.get("accounts") if isinstance(fleet_dict, dict) else {}
         recalculated_accounts: dict[str, AccountUtilizationRecord] = {}

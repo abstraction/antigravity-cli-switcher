@@ -108,18 +108,18 @@ class DashboardScreen(DashboardActionsScreenBase):
     def compose(self) -> ComposeResult:
         yield HeaderBar(id="header-bar")
         with TabbedContent(initial=self.initial_tab, id="main-tabs"):
-            with TabPane("Accounts", id="tab-accounts"):
+            with TabPane("1 Accounts", id="tab-accounts"):
                 yield AccountTable(id="account-table")
                 yield DetailPanel(id="detail-panel")
-            with TabPane("Fleet", id="tab-fleet"):
+            with TabPane("2 Fleet", id="tab-fleet"):
                 yield FleetTab(id="fleet-tab")
-            with TabPane("Logs", id="tab-logs"):
+            with TabPane("3 Logs", id="tab-logs"):
                 yield LogsTab(id="logs-tab")
-            with TabPane("History", id="tab-history"):
+            with TabPane("4 History", id="tab-history"):
                 yield HistoryTab(id="history-tab")
-            with TabPane("Hygiene", id="tab-hygiene"):
+            with TabPane("5 Hygiene", id="tab-hygiene"):
                 yield HygieneTab(id="hygiene-tab")
-            with TabPane("Proxies", id="tab-proxies"):
+            with TabPane("6 Proxies", id="tab-proxies"):
                 yield ProxyTab(id="proxy-tab")
         with Vertical(id="bottom-container"):
             yield StatusBar(id="status-bar")

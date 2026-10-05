@@ -47,13 +47,24 @@ class ProxyTab(Widget):
         )
         yield table
         with Horizontal(id="proxy-actions"):
-            yield Button("Configure", id="btn-proxy-edit", variant="primary")
-            yield Button("Toggle", id="btn-proxy-toggle", variant="default")
-            yield Button("Clear", id="btn-proxy-clear", variant="error")
-            yield Button("Test", id="btn-proxy-test", variant="default")
+            yield Button(r"[bold #58a6ff]\[p][/] Configure", id="btn-proxy-edit", variant="default")
+            yield Button(r"[bold #58a6ff]\[e][/] Toggle", id="btn-proxy-toggle", variant="default")
+            yield Button(r"[bold #f85149]\[c][/] Clear", id="btn-proxy-clear", variant="default")
+            yield Button(r"[bold #58a6ff]\[t][/] Test", id="btn-proxy-test", variant="default")
 
     def on_mount(self) -> None:
         table = self.query_one("#proxy-table", DataTable)
+        table.tooltip = "Proxy Configuration Table: Per-account network egress routes and latency."
+        self.query_one(
+            "#btn-proxy-edit", Button
+        ).tooltip = "Configure HTTP/SOCKS5 proxy address and optional credentials."
+        self.query_one(
+            "#btn-proxy-toggle", Button
+        ).tooltip = "Enable or disable proxy routing for the selected account."
+        self.query_one(
+            "#btn-proxy-clear", Button
+        ).tooltip = "Remove proxy configuration completely from the selected account."
+        self.query_one("#btn-proxy-test", Button).tooltip = "Probe proxy latency and endpoint connectivity."
         table.add_column("Sel", key="sel", width=3)
         table.add_column("Account", key="account", width=16)
         table.add_column("State", key="state", width=8)

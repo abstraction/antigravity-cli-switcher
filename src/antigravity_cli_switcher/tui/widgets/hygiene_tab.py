@@ -43,20 +43,28 @@ class HygieneTab(Widget):
         )
         yield table
         with Horizontal(id="hygiene-actions"):
-            yield Button("Run Fix", id="btn-hygiene-fix", variant="error")
-            yield Button("Relogin Account", id="btn-hygiene-relogin", variant="warning")
-            yield Button("Refresh", id="btn-hygiene-refresh", variant="primary")
+            yield Button(r"[bold #58a6ff]\[f][/] Run Fix", id="btn-hygiene-fix", variant="default")
+            yield Button(r"[bold #58a6ff]\[l][/] Relogin", id="btn-hygiene-relogin", variant="default")
+            yield Button(r"[bold #58a6ff]\[t][/] Refresh", id="btn-hygiene-refresh", variant="default")
 
     def on_mount(self) -> None:
         table = self.query_one("#hygiene-table", DataTable)
-        table.add_column("Account", key="account", width=16)
-        table.add_column("Status", key="status", width=10)
-        table.add_column("Action", key="action", width=10)
-        table.add_column("Expected Email", key="expected_email", width=18)
-        table.add_column("Token Email", key="token_email", width=18)
-        table.add_column("Synthetic", key="synthetic", width=8)
-        table.add_column("Expired", key="expired", width=8)
-        table.add_column("Summary", key="summary", width=24)
+        table.tooltip = "Account Hygiene: Token integrity, credential expiry, and token contamination audit."
+        btn_fix = self.query_one("#btn-hygiene-fix", Button)
+        btn_fix.tooltip = "Run automated hygiene repairs for contaminated tokens and expired state."
+        btn_rel = self.query_one("#btn-hygiene-relogin", Button)
+        btn_rel.tooltip = "Re-authenticate the selected account via Google OAuth."
+        btn_ref = self.query_one("#btn-hygiene-refresh", Button)
+        btn_ref.tooltip = "Re-scan all accounts and verify session tokens."
+
+        table.add_column("Account", key="account", width=14)
+        table.add_column("Status", key="status", width=8)
+        table.add_column("Action", key="action", width=8)
+        table.add_column("Expected Email", key="expected_email", width=16)
+        table.add_column("Token Email", key="token_email", width=16)
+        table.add_column("Synthetic", key="synthetic", width=6)
+        table.add_column("Expired", key="expired", width=6)
+        table.add_column("Summary", key="summary", width=18)
 
     @property
     def acs_app(self) -> ACSApp:
