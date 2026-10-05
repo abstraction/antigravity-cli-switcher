@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from rich.text import Text
+
+from antigravity_cli_switcher.models import AccountMeta
+from antigravity_cli_switcher.tui.formatters import format_natural_duration, parse_iso_timestamp
 
 
 def format_badge(label: str, style: str) -> Text:
@@ -120,7 +125,8 @@ def render_meter_bar(value: float | None, total: float = 100.0, width: int = 5) 
     if filled_count > 0:
         bar.append("■" * filled_count, style=bar_style)
     if empty_count > 0:
-        bar.append("░" * empty_count, style="dim #444444")
+        empty_style = "dim #dc4c4c" if (value is not None and clamped <= 0.0) else "dim #444444"
+        bar.append("░" * empty_count, style=empty_style)
     return bar
 
 
@@ -157,4 +163,40 @@ def format_colored_model_usage(raw_text: str) -> Text:
         res.append(part, style=style)
         if idx == 0:
             res.append("/", style="#444444")
+    return res
+
+
+def format_rich_window_summary(
+    meta: AccountMeta,
+    window_name: str,
+    now: datetime,
+    family: str = "gemini",
+) -> Text:
+    """Format full summary of a usage window including btop meter bar and reset countdown."""
+    canonical = "other" if family in ("claude", "other") else family
+    windows = meta.usage_families.get(canonical, {})
+    if not windows and canonical == "gemini":
+        windows = meta.usage_windows
+
+    window = windows.get(window_name)
+    if window is None or (window.value is None and window.status == "unknown"):
+        return Text("-", style="dim")
+
+    res = Text()
+    if window.value is None:
+        res.append(str(window.status), style="dim")
+    else:
+        val = float(window.value)
+        res.append_text(render_meter_bar(val, width=5))
+        res.append(" ")
+        pct_style = "bold #77ca9b" if val > 50 else ("bold #cbc06c" if val > 20 else "bold #dc4c4c")
+        res.append(f"{round(val):>3}%", style=pct_style)
+
+    reset_at = parse_iso_timestamp(window.reset_at)
+    if reset_at is not None:
+        delta = int((reset_at - now).total_seconds())
+        countdown = format_natural_duration(delta)
+        if countdown != "-":
+            res.append(f" (in {countdown})", style="dim #888888")
+
     return res
