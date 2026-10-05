@@ -333,11 +333,15 @@ def sync_state_from_disk(paths: ManagerPaths, state: dict) -> dict:
 
     fleet_util = state.setdefault("fleet_utilization", {})
     if isinstance(fleet_util, dict):
+        from antigravity_cli_switcher.manager.utilization import _get_or_create_account_record
+
         fleet_accounts = fleet_util.get("accounts")
         if isinstance(fleet_accounts, dict):
             for name in list(fleet_accounts):
                 if name not in disk_accounts:
                     fleet_accounts.pop(name, None)
+        for name in disk_accounts:
+            _get_or_create_account_record(fleet_util, name)
         if fleet_util.get("last_active_account") not in disk_accounts:
             fleet_util["last_active_account"] = ""
 

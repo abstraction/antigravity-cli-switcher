@@ -171,7 +171,7 @@ class AccountTable(DataTable[Text | str]):
 
         state_badge = format_state(state_str)
         plan_badge = format_plan_badge(meta.plan_type)
-        if is_zombie and prob_status in ("ready", "unknown"):
+        if is_zombie and prob_status in ("ok", "ready", "unknown"):
             health_badge = Text("ZOMBIE", style="bold red")
         else:
             health_badge = format_health_badge(prob_status)
