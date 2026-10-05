@@ -84,8 +84,8 @@ DetailPanel.collapsed {
     width: 14;
 }
 
-/* Tabs: Proxy, Hygiene, History */
-ProxyTab, HygieneTab, HistoryTab, LogsTab {
+/* Tabs: Proxy, Hygiene, History, Fleet */
+ProxyTab, HygieneTab, HistoryTab, LogsTab, FleetTab {
     height: 1fr;
 }
 
@@ -97,7 +97,17 @@ ProxyTab, HygieneTab, HistoryTab, LogsTab {
     margin-top: 1;
 }
 
-#proxy-table, #hygiene-table, #history-table {
+#fleet-summary, #fleet-recommendation {
+    height: auto;
+    min-height: 3;
+    max-height: 5;
+    background: $panel;
+    border: round $primary-muted;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+#proxy-table, #hygiene-table, #history-table, #fleet-table {
     height: 1fr;
     border: round $primary-muted;
     background: $surface;

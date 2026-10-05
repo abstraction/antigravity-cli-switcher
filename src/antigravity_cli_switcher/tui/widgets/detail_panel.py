@@ -167,11 +167,6 @@ class DetailPanel(Widget):
                 text.append("│ Burnt     : ", style="dim bold")
                 text.append(f"{burnt_str} (Min Head: {min_hd_str})\n", style="white")
 
-        if utilization is not None and utilization.is_zombie:
-            waste = int(utilization.monthly_cost_usd)
-            text.append("⚠️  ZOMBIE  : ", style="bold red")
-            text.append(f"0% quota used in 7 days (${waste}/mo waste)\n", style="bold red")
-
         if summary and summary != "Ready for use.":
             text.append("Note      : ", style="bold yellow")
             text.append(f"{summary}\n", style="yellow")

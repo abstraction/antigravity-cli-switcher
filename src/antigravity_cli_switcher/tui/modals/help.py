@@ -61,7 +61,7 @@ class HelpModal(ModalScreen[None]):
             (
                 "Navigation & View",
                 [
-                    ("1-5", "Jump to tab (Accounts, Hygiene, History, Logs, Proxies)"),
+                    ("1-6", "Jump to tab (Accounts, Logs, History, Hygiene, Proxies, Fleet)"),
                     ("[ / ]", "Previous / next tab"),
                     ("s", "Cycle sort order (name, state, health, usage)"),
                     ("o", "Toggle Details overview panel"),

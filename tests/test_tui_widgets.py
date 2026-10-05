@@ -233,14 +233,12 @@ async def test_detail_panel_utilization_and_zombie() -> None:
         assert "Burnt" in rendered
         assert "G:45%" in rendered
         assert "O:20%" in rendered
-        assert "ZOMBIE" in rendered
-        assert "$25/mo waste" in rendered
+        assert "ZOMBIE" not in rendered
+        assert "$25/mo waste" not in rendered
 
 
 @pytest.mark.asyncio
-async def test_account_table_preserves_error_over_zombie() -> None:
-    from antigravity_cli_switcher.tui.widgets.account_table import AccountTable
-
+async def test_account_table_health_column_strictly_operational() -> None:
     table = AccountTable()
     snapshot, verification = create_sample_snapshot()
 
@@ -257,18 +255,18 @@ async def test_account_table_preserves_error_over_zombie() -> None:
     )
     app = TableApp(paths=paths)
     async with app.run_test():
-        # gamma has SYNTHETIC_TOKEN; also flag it as a zombie
-        snapshot.fleet_utilization.accounts["gamma"] = AccountUtilizationRecord(
-            is_zombie=True,
-            monthly_cost_usd=20.0,
-        )
+        # Even with zombie accounts, AccountTable strictly displays operational health
+        snapshot.fleet_utilization.accounts["gamma"] = AccountUtilizationRecord(is_zombie=True, monthly_cost_usd=20.0)
+        snapshot.fleet_utilization.accounts["alpha"] = AccountUtilizationRecord(is_zombie=True, monthly_cost_usd=20.0)
         table.update_accounts(snapshot, verification, sort_mode="name")
-        gamma_row = table.get_row("gamma")
-        # Find cell containing health badge
-        row_texts = [str(cell) for cell in gamma_row]
-        # Health column must NOT be replaced by ZOMBIE when an error status exists
-        assert not any("ZOMBIE" in t for t in row_texts)
-        assert any("SYNTHE" in t for t in row_texts)
+
+        gamma_texts = [str(cell) for cell in table.get_row("gamma")]
+        assert not any("ZOMBIE" in t for t in gamma_texts)
+        assert any("SYNTHE" in t for t in gamma_texts)
+
+        alpha_texts = [str(cell) for cell in table.get_row("alpha")]
+        assert not any("ZOMBIE" in t for t in alpha_texts)
+        assert any("OK" in t for t in alpha_texts)
 
 
 @pytest.mark.asyncio

@@ -148,12 +148,15 @@ async def test_dashboard_screen_pilot(temp_paths: ManagerPaths, monkeypatch: pyt
         await pilot.press("5")
         assert tabs.active == "tab-proxies"
 
+        await pilot.press("6")
+        assert tabs.active == "tab-fleet"
+
         # Test tab navigation with [ and ]
         await pilot.press("]")
         assert tabs.active == "tab-accounts"
 
         await pilot.press("[")
-        assert tabs.active == "tab-proxies"
+        assert tabs.active == "tab-fleet"
 
         # Test tab navigation with Left and Right arrow keys
         await pilot.press("right")
@@ -240,10 +243,14 @@ async def test_dashboard_arrow_navigation_and_tab_switching(
         await pilot.pause()
         assert tabs.active == "tab-proxies"
 
-        # Tab navigation with left arrow (Proxies -> Hygiene)
+        await pilot.press("right")
+        await pilot.pause()
+        assert tabs.active == "tab-fleet"
+
+        # Tab navigation with left arrow (Fleet -> Proxies)
         await pilot.press("left")
         await pilot.pause()
-        assert tabs.active == "tab-hygiene"
+        assert tabs.active == "tab-proxies"
 
 
 @pytest.mark.asyncio
@@ -403,6 +410,7 @@ async def test_lazy_tab_dirty_tracking(temp_paths: ManagerPaths, monkeypatch: py
         assert screen._hygiene_dirty is True
         assert screen._history_dirty is True
         assert screen._logs_dirty is True
+        assert screen._fleet_dirty is True
 
         # Switch to tab-logs
         await pilot.press("2")
@@ -413,6 +421,11 @@ async def test_lazy_tab_dirty_tracking(temp_paths: ManagerPaths, monkeypatch: py
         await pilot.press("4")
         await pilot.pause()
         assert screen._hygiene_dirty is False
+
+        # Switch to tab-fleet
+        await pilot.press("6")
+        await pilot.pause()
+        assert screen._fleet_dirty is False
 
 
 def test_concurrency_guard_prevents_duplicate_refresh(temp_paths: ManagerPaths) -> None:

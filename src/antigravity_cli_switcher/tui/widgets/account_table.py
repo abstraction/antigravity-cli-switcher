@@ -150,7 +150,6 @@ class AccountTable(DataTable[Text | str]):
         ver: AccountVerification | None,
         active_name: str | None,
         now: datetime,
-        is_zombie: bool = False,
     ) -> tuple[Text, Text, Text, Text, Text, Text, Text, Text, Text, Text, Text]:
         if ver is not None:
             prob_status = ver.problem_status.value
@@ -171,10 +170,7 @@ class AccountTable(DataTable[Text | str]):
 
         state_badge = format_state(state_str)
         plan_badge = format_plan_badge(meta.plan_type)
-        if is_zombie and prob_status in ("ok", "ready", "unknown"):
-            health_badge = Text("ZOMBIE", style="bold red")
-        else:
-            health_badge = format_health_badge(prob_status)
+        health_badge = format_health_badge(prob_status)
 
         if not meta.enabled:
             eff_str = Text("-", style="dim")
@@ -267,12 +263,7 @@ class AccountTable(DataTable[Text | str]):
         ):
             for name, meta in items:
                 ver = verification.accounts.get(name)
-                is_z = (
-                    bool(snapshot.fleet_utilization.accounts[name].is_zombie)
-                    if name in snapshot.fleet_utilization.accounts
-                    else False
-                )
-                vals = self._row_values(name, meta, ver, active_name, now, is_z)
+                vals = self._row_values(name, meta, ver, active_name, now)
                 val_dict = dict(zip(ALL_COL_KEYS, vals, strict=True))
                 for col_key in self._current_col_keys:
                     self.update_cell(name, col_key, val_dict[col_key], update_width=False)
@@ -291,12 +282,7 @@ class AccountTable(DataTable[Text | str]):
                 new_cursor_row = idx
 
             ver = verification.accounts.get(name)
-            is_z = (
-                bool(snapshot.fleet_utilization.accounts[name].is_zombie)
-                if name in snapshot.fleet_utilization.accounts
-                else False
-            )
-            vals = self._row_values(name, meta, ver, active_name, now, is_z)
+            vals = self._row_values(name, meta, ver, active_name, now)
             val_dict = dict(zip(ALL_COL_KEYS, vals, strict=True))
             row_cells = [val_dict[k] for k in self._current_col_keys]
             self.add_row(*row_cells, key=name)
