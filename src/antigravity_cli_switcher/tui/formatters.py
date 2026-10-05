@@ -55,7 +55,7 @@ def _format_usage_value(window: UsageWindow | None) -> str:
     if window is None:
         return "-"
     if window.value is not None:
-        return f"{round(float(window.value))}%"
+        return f"{round(float(window.value), 1):g}%"
     if window.status == "unknown":
         return "-"
     return str(window.status)[:4]

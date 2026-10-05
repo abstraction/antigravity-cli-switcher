@@ -186,7 +186,7 @@ class AccountTable(DataTable[Text | str]):
             else:
                 eff_val = score.effective_quota
                 eff_style = "bold green" if eff_val > 50 else ("bold yellow" if eff_val > 20 else "bold red")
-                eff_str = Text(f"{eff_val:.0f}%", style=eff_style)
+                eff_str = Text(f"{round(eff_val, 1):g}%", style=eff_style)
 
             gemini_str = Text(format_model_usage(meta, "gemini"))
             claude_str = Text(format_model_usage(meta, "claude"))
