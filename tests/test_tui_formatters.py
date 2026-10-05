@@ -116,35 +116,40 @@ class TUIFormattersTests(unittest.TestCase):
         self.assertEqual(format_next_refresh(meta_disabled, now), "-")
 
     def test_format_meter_bar(self) -> None:
-        self.assertEqual(format_meter_bar(None), "░░░░░")
-        self.assertEqual(format_meter_bar(0), "░░░░░")
-        self.assertEqual(format_meter_bar(100), "■■■■■")
-        self.assertEqual(format_meter_bar(80), "■■■■░")
-        self.assertEqual(format_meter_bar(20), "■░░░░")
-        self.assertEqual(format_meter_bar(-10), "░░░░░")
-        self.assertEqual(format_meter_bar(120), "■■■■■")
-        self.assertEqual(format_meter_bar(50, width=10), "■■■■■░░░░░")
+        self.assertEqual(format_meter_bar(None), "[     ]")
+        self.assertEqual(format_meter_bar(0), "[     ]")
+        self.assertEqual(format_meter_bar(100), "[■■■■■]")
+        self.assertEqual(format_meter_bar(80), "[■■■■ ]")
+        self.assertEqual(format_meter_bar(20), "[■    ]")
+        self.assertEqual(format_meter_bar(-10), "[     ]")
+        self.assertEqual(format_meter_bar(120), "[■■■■■]")
+        self.assertEqual(format_meter_bar(50, width=10), "[■■■■■     ]")
         self.assertEqual(format_meter_bar(50, width=0), "")
 
     def test_render_meter_bar(self) -> None:
         # Healthy (>50%)
         t_high = render_meter_bar(80)
-        self.assertEqual(t_high.plain, "■■■■░")
+        self.assertEqual(t_high.plain, "[■■■■ ]")
         self.assertTrue(any("#77ca9b" in str(span.style) for span in t_high.spans))
 
         # Warning (20-50%)
         t_mid = render_meter_bar(40)
-        self.assertEqual(t_mid.plain, "■■░░░")
+        self.assertEqual(t_mid.plain, "[■■   ]")
         self.assertTrue(any("#cbc06c" in str(span.style) for span in t_mid.spans))
 
         # Critical (<=20%)
         t_low = render_meter_bar(10)
-        self.assertEqual(t_low.plain, "■░░░░")
+        self.assertEqual(t_low.plain, "[■    ]")
         self.assertTrue(any("#dc4c4c" in str(span.style) for span in t_low.spans))
+
+        # Zero quota (exhausted with red brackets)
+        t_zero = render_meter_bar(0)
+        self.assertEqual(t_zero.plain, "[     ]")
+        self.assertTrue(any("#dc4c4c" in str(span.style) for span in t_zero.spans))
 
         # None / unconfigured
         t_none = render_meter_bar(None)
-        self.assertEqual(t_none.plain, "░░░░░")
+        self.assertEqual(t_none.plain, "[     ]")
 
     def test_format_colored_model_usage(self) -> None:
         # Normal pair
@@ -187,7 +192,7 @@ class TUIFormattersTests(unittest.TestCase):
         t_gem = format_rich_window_summary(meta_gemini, "short", now, family="gemini")
         self.assertIn("85%", t_gem.plain)
         self.assertIn("in 30m", t_gem.plain)
-        self.assertEqual(t_gem.plain[:5], "■■■■░")
+        self.assertEqual(t_gem.plain[:7], "[■■■■ ]")
 
         # Claude family from usage_families
         meta_claude = AccountMeta(
@@ -204,7 +209,7 @@ class TUIFormattersTests(unittest.TestCase):
         t_claude = format_rich_window_summary(meta_claude, "weekly", now, family="claude")
         self.assertIn("0%", t_claude.plain)
         self.assertIn("in 1d", t_claude.plain)
-        self.assertEqual(t_claude.plain[:5], "░░░░░")
+        self.assertEqual(t_claude.plain[:7], "[     ]")
 
 
 class TUIBackgroundRefreshTests(unittest.TestCase):

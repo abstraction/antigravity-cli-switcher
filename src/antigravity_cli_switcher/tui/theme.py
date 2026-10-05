@@ -76,11 +76,11 @@ def format_quota_ratio(used: float | None, total: float = 100.0) -> Text:
 
 
 def format_meter_bar(value: float | None, total: float = 100.0, width: int = 5) -> str:
-    """Render a compact btop-style meter bar using filled and empty blocks."""
+    """Render a compact btop-style meter bar using brackets and negative space."""
     if width <= 0:
         return ""
     if value is None:
-        return "░" * width
+        return f"[{' ' * width}]"
     clamped = max(0.0, min(total, float(value)))
     if clamped <= 0.0:
         filled = 0
@@ -92,15 +92,20 @@ def format_meter_bar(value: float | None, total: float = 100.0, width: int = 5) 
             filled = 1
         elif filled == width and clamped < total:
             filled = width - 1
-    return "■" * filled + "░" * (width - filled)
+    return f"[{'■' * filled}{' ' * (width - filled)}]"
 
 
 def render_meter_bar(value: float | None, total: float = 100.0, width: int = 5) -> Text:
-    """Render a btop-style gradient meter bar with jewel-tone colors."""
+    """Render a btop-style meter bar using brackets and negative space."""
     if width <= 0:
         return Text("")
     if value is None:
-        return Text("░" * width, style="dim #444444")
+        bar = Text()
+        bar.append("[", style="dim #444444")
+        bar.append(" " * width)
+        bar.append("]", style="dim #444444")
+        return bar
+
     clamped = max(0.0, min(total, float(value)))
     if clamped <= 0.0:
         filled_count = 0
@@ -121,12 +126,15 @@ def render_meter_bar(value: float | None, total: float = 100.0, width: int = 5) 
     else:
         bar_style = "bold #dc4c4c"
 
+    bracket_style = "dim #dc4c4c" if clamped <= 0.0 else "dim #444444"
+
     bar = Text()
+    bar.append("[", style=bracket_style)
     if filled_count > 0:
         bar.append("■" * filled_count, style=bar_style)
     if empty_count > 0:
-        empty_style = "dim #dc4c4c" if (value is not None and clamped <= 0.0) else "dim #444444"
-        bar.append("░" * empty_count, style=empty_style)
+        bar.append(" " * empty_count)
+    bar.append("]", style=bracket_style)
     return bar
 
 
