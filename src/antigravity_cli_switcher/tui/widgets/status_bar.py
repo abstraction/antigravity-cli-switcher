@@ -42,22 +42,22 @@ class StatusBar(Widget):
         width = self.size.width
 
         if "fail" in msg.lower() or "error" in msg.lower() or "blocked" in msg.lower():
-            text.append("✖ ", style="bold #f85149")
+            text.append("✖ ", style="bold #dc4c4c")
             if self.worker_status:
-                text.append(f"[{self.worker_status}] ", style="bold #f85149")
-            text.append(msg, style="bold #f85149")
+                text.append(f"[{self.worker_status}] ", style="bold #dc4c4c")
+            text.append(msg, style="bold #dc4c4c")
         elif msg.startswith("Ready"):
-            text.append("● ", style="bold #3fb950")
+            text.append("● ", style="bold #77ca9b")
             if self.worker_status:
-                text.append(f"[{self.worker_status}] ", style="bold #58a6ff")
-            text.append(msg, style="#8b949e")
+                text.append(f"[{self.worker_status}] ", style="bold #4897d4")
+            text.append(msg, style="#888888")
         else:
-            text.append("◐ ", style="bold #58a6ff")
+            text.append("◐ ", style="bold #4897d4")
             if self.worker_status:
-                text.append(f"[{self.worker_status}] ", style="bold #58a6ff")
-            text.append(msg, style="#e6edf3")
+                text.append(f"[{self.worker_status}] ", style="bold #4897d4")
+            text.append(msg, style="#cccccc")
 
-        hint_text = Text("[1-6] Tabs  [↑↓] Select", style="#8b949e")
+        hint_text = Text("[1-6] Tabs ╎ [↑↓] Select", style="#666666")
         if width > 0:
             pad = width - text.cell_len - hint_text.cell_len - 2
             if pad > 2:

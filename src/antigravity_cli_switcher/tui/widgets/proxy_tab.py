@@ -145,11 +145,11 @@ class ProxyTab(Widget):
 
         summary_text = Text()
         summary_text.append("Proxies: ", style="bold")
-        summary_text.append(f"{enabled_count} active", style="bold green")
-        summary_text.append(" │ ", style="dim")
-        summary_text.append(f"{saved_count} saved", style="yellow")
-        summary_text.append(" │ Active proxy: ", style="dim")
-        summary_text.append(active_proxy_str, style="bold cyan")
+        summary_text.append(f"{enabled_count} active", style="bold #77ca9b")
+        summary_text.append(" ╎ ", style="dim")
+        summary_text.append(f"{saved_count} saved", style="bold #cbc06c")
+        summary_text.append(" ╎ Active proxy: ", style="dim")
+        summary_text.append(active_proxy_str, style="bold #4897d4")
         summary.update(summary_text)
 
         cols = ("sel", "account", "state", "proxy_status", "label", "url", "latency")

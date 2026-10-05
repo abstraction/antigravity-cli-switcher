@@ -149,19 +149,19 @@ class HygieneTab(Widget):
 
         summary_text = Text()
         summary_text.append("Hygiene: ", style="bold")
-        summary_text.append(f"{total} total", style="white")
-        summary_text.append(" │ ", style="dim")
-        summary_text.append(f"{clean_count} clean", style="bold green")
-        summary_text.append(" │ ", style="dim")
-        summary_text.append(f"{warn_count} warnings", style="bold yellow")
-        summary_text.append(" │ ", style="dim")
+        summary_text.append(f"{total} total", style="#cccccc")
+        summary_text.append(" ╎ ", style="dim")
+        summary_text.append(f"{clean_count} clean", style="bold #77ca9b")
+        summary_text.append(" ╎ ", style="dim")
+        summary_text.append(f"{warn_count} warnings", style="bold #cbc06c")
+        summary_text.append(" ╎ ", style="dim")
         summary_text.append(
             f"{contam_count} contaminated",
-            style="bold red" if contam_count > 0 else "dim",
+            style="bold #dc4c4c" if contam_count > 0 else "dim",
         )
 
         if contam_count > 0:
-            summary_text.append(" │ Synthetic tokens found. Run fix.", style="bold red")
+            summary_text.append(" ╎ Synthetic tokens found. Run fix.", style="bold #dc4c4c")
 
         summary.update(summary_text)
 

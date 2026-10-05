@@ -18,6 +18,11 @@ from antigravity_cli_switcher.tui.formatters import (
     format_next_refresh,
     format_problem_summary,
 )
+from antigravity_cli_switcher.tui.theme import (
+    format_colored_model_usage,
+    format_meter_bar,
+    render_meter_bar,
+)
 from tests.conftest import ORIGINAL_START_DUE_WATCHER
 
 
@@ -108,6 +113,54 @@ class TUIFormattersTests(unittest.TestCase):
             refresh_policy_seconds=300,
         )
         self.assertEqual(format_next_refresh(meta_disabled, now), "-")
+
+    def test_format_meter_bar(self) -> None:
+        self.assertEqual(format_meter_bar(None), "░░░░░")
+        self.assertEqual(format_meter_bar(0), "░░░░░")
+        self.assertEqual(format_meter_bar(100), "■■■■■")
+        self.assertEqual(format_meter_bar(80), "■■■■░")
+        self.assertEqual(format_meter_bar(20), "■░░░░")
+        self.assertEqual(format_meter_bar(-10), "░░░░░")
+        self.assertEqual(format_meter_bar(120), "■■■■■")
+        self.assertEqual(format_meter_bar(50, width=10), "■■■■■░░░░░")
+        self.assertEqual(format_meter_bar(50, width=0), "")
+
+    def test_render_meter_bar(self) -> None:
+        # Healthy (>50%)
+        t_high = render_meter_bar(80)
+        self.assertEqual(t_high.plain, "■■■■░")
+        self.assertTrue(any("#77ca9b" in str(span.style) for span in t_high.spans))
+
+        # Warning (20-50%)
+        t_mid = render_meter_bar(40)
+        self.assertEqual(t_mid.plain, "■■░░░")
+        self.assertTrue(any("#cbc06c" in str(span.style) for span in t_mid.spans))
+
+        # Critical (<=20%)
+        t_low = render_meter_bar(10)
+        self.assertEqual(t_low.plain, "■░░░░")
+        self.assertTrue(any("#dc4c4c" in str(span.style) for span in t_low.spans))
+
+        # None / unconfigured
+        t_none = render_meter_bar(None)
+        self.assertEqual(t_none.plain, "░░░░░")
+
+    def test_format_colored_model_usage(self) -> None:
+        # Normal pair
+        res = format_colored_model_usage(" 95%/80% ")
+        self.assertEqual(res.plain, " 95%/80% ")
+        self.assertTrue(any("#77ca9b" in str(span.style) for span in res.spans))
+
+        # Warning and critical pair
+        res_crit = format_colored_model_usage(" 35%/15% ")
+        self.assertEqual(res_crit.plain, " 35%/15% ")
+        self.assertTrue(any("#cbc06c" in str(span.style) for span in res_crit.spans))
+        self.assertTrue(any("#dc4c4c" in str(span.style) for span in res_crit.spans))
+
+        # Dash / unknown
+        res_dash = format_colored_model_usage("-")
+        self.assertEqual(res_dash.plain, "-")
+        self.assertEqual(format_colored_model_usage("").plain, "-")
 
 
 class TUIBackgroundRefreshTests(unittest.TestCase):

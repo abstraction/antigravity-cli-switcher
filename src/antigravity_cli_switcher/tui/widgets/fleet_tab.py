@@ -42,7 +42,7 @@ class FleetTab(Widget):
     def compose(self) -> ComposeResult:
         yield Static("Fleet summary: loading...", id="fleet-summary")
         yield Static(
-            "[bold #58a6ff](i)[/]  Peak Burst: max concurrent active accounts │ Burnt %: 7d quota consumed │ Zombie: 0% 7d usage",
+            "[bold #4897d4](i)[/]  Peak Burst: max concurrent active accounts ╎ Burnt %: 7d quota consumed ╎ Zombie: 0% 7d usage",
             id="fleet-legend",
         )
         table: DataTable[Text | str] = DataTable(
@@ -148,27 +148,27 @@ class FleetTab(Widget):
         is_zombie: bool,
     ) -> tuple[Text, Text, Text, Text, Text, Text, Text, Text]:
         marker = " ★" if is_active else ""
-        name_style = "bold #3fb950" if is_active else "bold #58a6ff"
+        name_style = "bold #77ca9b" if is_active else "bold #4897d4"
         name_text = Text(f"{name}{marker}", style=name_style)
 
-        status_style = "#3fb950" if status == "active" else ("dim" if status == "disabled" else "#d29922")
+        status_style = "#77ca9b" if status == "active" else ("dim" if status == "disabled" else "#cbc06c")
         status_text = Text(status, style=status_style)
 
-        duty_style = "bold #3fb950" if duty_pct > 15 else ("#3fb950" if duty_pct > 0 else "dim")
+        duty_style = "bold #77ca9b" if duty_pct > 15 else ("#77ca9b" if duty_pct > 0 else "dim")
         duty_text = Text(f"{duty_pct:>5.1f}%", style=duty_style)
 
-        g_style = "bold #d29922" if gemini_burnt > 50 else ("#e6edf3" if gemini_burnt > 0 else "dim")
+        g_style = "bold #cbc06c" if gemini_burnt > 50 else ("#cccccc" if gemini_burnt > 0 else "dim")
         g_text = Text(f"{round(gemini_burnt):>3}%", style=g_style)
 
-        c_style = "bold #d29922" if claude_burnt > 50 else ("#e6edf3" if claude_burnt > 0 else "dim")
+        c_style = "bold #cbc06c" if claude_burnt > 50 else ("#cccccc" if claude_burnt > 0 else "dim")
         c_text = Text(f"{round(claude_burnt):>3}%", style=c_style)
 
-        h_style = "bold #f85149" if min_headroom < 20 else ("bold #d29922" if min_headroom < 50 else "bold #3fb950")
+        h_style = "bold #dc4c4c" if min_headroom < 20 else ("bold #cbc06c" if min_headroom < 50 else "bold #77ca9b")
         h_text = Text(f"{round(min_headroom):>3}%", style=h_style)
 
-        cost_text = Text(f"${cost_usd:.0f}/mo", style="#e6edf3")
+        cost_text = Text(f"${cost_usd:.0f}/mo", style="#cccccc")
 
-        z_text = Text("ZOMBIE", style="bold #f85149") if is_zombie else Text("NO", style="dim")
+        z_text = Text("ZOMBIE", style="bold #dc4c4c") if is_zombie else Text("NO", style="dim")
 
         return (
             name_text,

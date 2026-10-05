@@ -25,6 +25,7 @@ from antigravity_cli_switcher.tui.formatters import (
     format_next_refresh,
 )
 from antigravity_cli_switcher.tui.theme import (
+    format_colored_model_usage,
     format_health_badge,
     format_plan_badge,
     format_state,
@@ -171,9 +172,9 @@ class AccountTable(DataTable[Text | str]):
             prob_status = "ok"
         state_str = "active" if name == active_name else ("disabled" if not meta.enabled else "standby")
 
-        marker = Text(" ★", style="bold green") if name == active_name else Text("")
+        marker = Text(" ★", style="bold #77ca9b") if name == active_name else Text("")
 
-        name_style = "bold green" if name == active_name else ("dim italic" if not meta.enabled else "bold cyan")
+        name_style = "bold #77ca9b" if name == active_name else ("dim italic" if not meta.enabled else "bold #4897d4")
         name_text = Text(name, style=name_style)
 
         state_badge = format_state(state_str)
@@ -193,14 +194,14 @@ class AccountTable(DataTable[Text | str]):
                 eff_str = Text("-", style="dim")
             else:
                 eff_val = score.effective_quota
-                eff_style = "bold green" if eff_val > 50 else ("bold yellow" if eff_val > 20 else "bold red")
+                eff_style = "bold #77ca9b" if eff_val > 50 else ("bold #cbc06c" if eff_val > 20 else "bold #dc4c4c")
                 eff_str = Text(f"{round(eff_val, 1):g}%", style=eff_style)
 
-            gemini_str = Text(format_model_usage(meta, "gemini"))
-            claude_str = Text(format_model_usage(meta, "claude"))
-            reset_str = Text(format_countdown(meta, now), style="dim")
-            next_str = Text(format_next_refresh(meta, now), style="cyan")
-            err_str = Text(format_last_error(meta), style="dim red" if meta.last_error else "dim")
+            gemini_str = format_colored_model_usage(format_model_usage(meta, "gemini"))
+            claude_str = format_colored_model_usage(format_model_usage(meta, "claude"))
+            reset_str = Text(format_countdown(meta, now), style="#666666")
+            next_str = Text(format_next_refresh(meta, now), style="#4897d4")
+            err_str = Text(format_last_error(meta), style="bold #dc4c4c" if meta.last_error else "dim")
 
         return (
             marker,

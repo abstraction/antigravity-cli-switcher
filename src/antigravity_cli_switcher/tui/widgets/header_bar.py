@@ -58,16 +58,16 @@ class HeaderBar(Widget):
             return
 
         text = Text()
-        text.append(" ACS ", style="bold #ffffff on #21262d")
+        text.append(" ACS ", style="bold #ffffff on #1c2128")
 
         active_label = self.active_account or "none"
         active_dot = "● " if self.active_account else "○ "
-        active_style = "bold #3fb950" if self.active_account else "bold #f85149"
-        mode_style = "bold #bc8cff" if self.switch_mode == "auto" else "#d29922"
-        backend_style = "bold #58a6ff" if self.quota_backend == "http" else "bold #d29922"
-        sep_style = "#30363d"
-        lbl_style = "#8b949e"
-        val_style = "#e6edf3"
+        active_style = "bold #77ca9b" if self.active_account else "bold #dc4c4c"
+        mode_style = "bold #9b82d4" if self.switch_mode == "auto" else "#cbc06c"
+        backend_style = "bold #4897d4" if self.quota_backend == "http" else "bold #cbc06c"
+        sep_style = "#444444"
+        lbl_style = "#777777"
+        val_style = "#cccccc"
         width = self.size.width
 
         # Always include active account token
@@ -99,10 +99,10 @@ class HeaderBar(Widget):
         target_max = max(width - 2, 20) if width > 0 else 120
 
         for tok_str, tok_style in candidates:
-            needed = 3 + len(tok_str)  # " │ " + string
+            needed = 3 + len(tok_str)  # " ╎ " + string
             if width > 0 and (current_len + needed) > target_max:
                 break
-            text.append(" │ ", style=sep_style)
+            text.append(" ╎ ", style=sep_style)
             text.append(tok_str, style=tok_style)
             current_len += needed
 
