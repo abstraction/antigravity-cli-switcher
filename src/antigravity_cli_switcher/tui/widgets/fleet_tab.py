@@ -56,25 +56,25 @@ class FleetTab(Widget):
     def on_mount(self) -> None:
         summary = self.query_one("#fleet-summary", Static)
         summary.tooltip = (
-            "Fleet Sizing & Concurrency:\n"
-            "• Archetype: Usage pattern classification over rolling 7 days\n"
-            "• Spend: Total estimated monthly cost ($20/mo per Pro account)\n"
-            "• Waste: Cost of idle or zombie accounts that could be retired\n"
-            "• Peak Burst: Maximum accounts actively burning quota concurrently\n"
-            "• Recommended Size: Optimal fleet size to meet peak load without waste"
+            "Fleet metrics:\n"
+            "• Archetype: 7-day usage pattern\n"
+            "• Spend: Total monthly account cost\n"
+            "• Waste: Monthly cost of idle accounts\n"
+            "• Peak Burst: Peak concurrent active accounts\n"
+            "• Recommended Size: Account count needed for peak burst"
         )
         legend = self.query_one("#fleet-legend", Static)
         legend.tooltip = (
-            "Metric Explanations:\n"
-            "• Peak Burst: Max concurrent accounts in use during load bursts\n"
-            "• Gemini/Claude Burnt %: Quota percentage consumed over 7 days\n"
-            "• Min Headroom %: Lowest remaining quota safety margin before rate limit\n"
-            "• Zombie Flag: Accounts paying $20/mo with 0% 7-day usage"
+            "Metrics:\n"
+            "• Peak Burst: Max concurrent accounts active during load\n"
+            "• Burnt %: Total quota percentage consumed over 7 days\n"
+            "• Min Headroom %: Lowest recorded quota percentage before reset\n"
+            "• Zombie: Accounts with 0% duty cycle and 0% quota consumed"
         )
         rec = self.query_one("#fleet-recommendation", Static)
-        rec.tooltip = "Rightsizing Guidance: Automated recommendation to optimize seat count and subagent throughput."
+        rec.tooltip = "Fleet recommendation based on trailing utilization."
         table = self.query_one("#fleet-table", DataTable)
-        table.tooltip = "Fleet Table: Highlights account-level duty cycles, quota burn rates, and zombie flags."
+        table.tooltip = "Account duty cycles, quota consumption, and zombie status."
         table.add_column("Account", key="account", width=12)
         table.add_column("Status", key="status", width=7)
         table.add_column("7D Duty %", key="duty", width=9)

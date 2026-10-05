@@ -26,7 +26,7 @@ class StatusBar(Widget):
         self._refresh_content()
 
     def on_mount(self) -> None:
-        self.tooltip = "ACS Status Bar: Displays active background worker progress, quota polling events, and errors."
+        self.tooltip = "Status: Background worker activity and operational messages."
 
     def on_resize(self, event: events.Resize) -> None:
         self._refresh_content()

@@ -190,13 +190,13 @@ def compute_fleet_insight(state: dict[str, object], days: int = 7, now: datetime
     if downsize_count > 0:
         summary = f"Downsize by {downsize_count} account{'s' if downsize_count > 1 else ''} to save ${int(total_waste)}/mo (${int(annual_savings)}/yr)."
     elif len(zombies) > 0 and rec_size == len(all_names):
-        summary = f"Fleet has {len(zombies)} idle standby account(s); retained to absorb peak burst depth {peak_burst}."
+        summary = f"Fleet has {len(zombies)} idle standby account(s). Retained to absorb peak burst depth {peak_burst}."
     elif workload_ramp:
-        summary = "Fleet has surplus headroom; safe to increase autonomous subagent workloads."
+        summary = "Fleet has surplus headroom for additional workloads."
     elif archetype == FleetArchetype.QUOTA_GRINDER:
-        summary = "Fleet is under heavy load with frequent exhaustions; consider adding capacity."
+        summary = "Fleet is under heavy load with frequent exhaustions. Consider adding accounts."
     else:
-        summary = "Fleet capacity is well-matched to current workload."
+        summary = "Fleet capacity matches current workload."
 
     return FleetInsight(
         archetype=archetype,

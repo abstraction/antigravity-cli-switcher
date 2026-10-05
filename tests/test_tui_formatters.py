@@ -207,7 +207,6 @@ class TUIFormattersTests(unittest.TestCase):
         self.assertEqual(t_claude.plain[:5], "░░░░░")
 
 
-
 class TUIBackgroundRefreshTests(unittest.TestCase):
     def test_check_due_refresh_triggers_worker(self) -> None:
         paths = build_paths("/tmp/mock_root")

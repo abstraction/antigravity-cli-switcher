@@ -49,13 +49,13 @@ class HygieneTab(Widget):
 
     def on_mount(self) -> None:
         table = self.query_one("#hygiene-table", DataTable)
-        table.tooltip = "Account Hygiene: Token integrity, credential expiry, and token contamination audit."
+        table.tooltip = "Hygiene audit: Token integrity and credential expiration."
         btn_fix = self.query_one("#btn-hygiene-fix", Button)
-        btn_fix.tooltip = "Run automated hygiene repairs for contaminated tokens and expired state."
+        btn_fix.tooltip = "Repair contaminated tokens and stale state."
         btn_rel = self.query_one("#btn-hygiene-relogin", Button)
-        btn_rel.tooltip = "Re-authenticate the selected account via Google OAuth."
+        btn_rel.tooltip = "Re-authenticate selected account."
         btn_ref = self.query_one("#btn-hygiene-refresh", Button)
-        btn_ref.tooltip = "Re-scan all accounts and verify session tokens."
+        btn_ref.tooltip = "Re-scan accounts and verify session tokens."
 
         table.add_column("Account", key="account", width=14)
         table.add_column("Status", key="status", width=8)
@@ -222,7 +222,7 @@ class HygieneTab(Widget):
         try:
             actions = fix_hygiene(self.acs_app.paths)
             if actions:
-                msg = f"Applied hygiene fix: {'; '.join(actions)}"
+                msg = f"Applied hygiene fix: {', '.join(actions)}"
             else:
                 msg = "No hygiene issues found."
             self.app.call_from_thread(self.post_message, StatusMessage(msg))

@@ -127,11 +127,11 @@ class AccountTable(DataTable[Text | str]):
 
     def on_mount(self) -> None:
         self.tooltip = (
-            "Accounts Table:\n"
-            "• Eff %: Effective quota score based on bottleneck model\n"
-            "• (S/W): Short (5h) and Weekly (7d) quota % remaining\n"
-            "• Reset (S/W): Time until short (5h) and weekly quota replenish\n"
-            "• Next: Scheduled time for next live background check\n"
+            "Accounts:\n"
+            "• Eff %: Remaining quota percentage of bottleneck model\n"
+            "• (S/W): 5-hour and weekly quota percentage remaining\n"
+            "• Reset (S/W): Countdown until quota reset\n"
+            "• Next: Time until next background check\n"
             "Keys: [Enter] Switch · [u] Quota · [l] Relogin · [e] Enable · [o] Details · [?] Help"
         )
         target_keys = self._get_column_keys_for_width(self.size.width)

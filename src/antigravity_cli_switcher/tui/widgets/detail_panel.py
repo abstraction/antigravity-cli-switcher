@@ -47,9 +47,7 @@ class DetailPanel(Widget):
         yield Static(id="detail-content")
 
     def on_mount(self) -> None:
-        self.tooltip = (
-            "Account Inspection Panel: Press 'o' to toggle. Shows token verification, quota windows, and diagnostics."
-        )
+        self.tooltip = "Account details: press 'o' to toggle. Shows credentials, quota windows, and diagnostics."
 
     def on_resize(self, event: events.Resize) -> None:
         if self._last_name and self._last_meta:
@@ -245,9 +243,9 @@ class DetailPanel(Widget):
 
         if rec == "human_intervention":
             text.append("Action      : ", style="bold #dc4c4c")
-            text.append("Requires human intervention. Verify in browser or switch account.\n", style="bold #dc4c4c")
+            text.append("Requires human intervention. Verify in browser or switch accounts.\n", style="bold #dc4c4c")
         elif rec == "relogin":
             text.append("Action      : ", style="bold #9b82d4")
-            text.append("Press 'l' to relogin / fix this account.\n", style="bold #9b82d4")
+            text.append("Press [l] to relogin account.\n", style="bold #9b82d4")
 
         content_static.update(text)

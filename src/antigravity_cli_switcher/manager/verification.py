@@ -159,7 +159,7 @@ def verify_account(paths: ManagerPaths, name: str, meta: AccountMeta) -> Account
     ):
         problem_status = ProblemStatus.INELIGIBLE
         recommended_action = "human_intervention"
-        summary = "Account ineligible: requires human intervention. Verify in browser or use another account."
+        summary = "Account ineligible. Requires human intervention. Verify in browser or switch accounts."
         health_status = HealthStatus.INELIGIBLE
     elif is_synthetic:
         problem_status = ProblemStatus.SYNTHETIC_TOKEN
@@ -179,18 +179,18 @@ def verify_account(paths: ManagerPaths, name: str, meta: AccountMeta) -> Account
         problem_status = ProblemStatus.OAUTH_ROTATED
         recommended_action = "update_credentials"
         summary = (
-            "HTTP token refresh failed; native CLI warmup fallback was used. "
+            "HTTP token refresh failed. Fallback to native CLI warmup occurred. "
             "Google OAuth desktop credentials may have rotated."
         )
         health_status = HealthStatus.OAUTH_ROTATED
     elif health_status == HealthStatus.TOKEN_STALE:
         problem_status = ProblemStatus.TOKEN_REFRESH_REQUIRED
         recommended_action = "refresh"
-        summary = "Access token is stale; refresh is recommended."
+        summary = "Access token is stale. Refresh recommended."
     elif health_status == HealthStatus.QUOTA_STALE:
         problem_status = ProblemStatus.QUOTA_CHECK_DUE
         recommended_action = "refresh"
-        summary = "Cached live status is stale; refresh is recommended."
+        summary = "Cached live status is stale. Refresh recommended."
 
     return AccountVerification(
         problem_status=problem_status,

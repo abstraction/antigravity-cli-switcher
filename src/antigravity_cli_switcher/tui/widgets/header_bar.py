@@ -49,7 +49,7 @@ class HeaderBar(Widget):
         self._refresh_content()
 
     def on_mount(self) -> None:
-        self.tooltip = "ACS Status Bar: Shows active account, switching mode, quota backend, and sync configuration."
+        self.tooltip = "Status: Active account, switch mode, quota backend, and sync interval."
 
     def _refresh_content(self) -> None:
         try:

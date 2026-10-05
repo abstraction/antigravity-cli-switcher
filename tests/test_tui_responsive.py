@@ -105,7 +105,7 @@ async def test_help_modal_display_and_dismiss(temp_paths: ManagerPaths) -> None:
         assert "Navigation & View" in text_str
         assert "Enter" in text_str
         assert "Toggle Details" in text_str
-        assert "Metrics & Terminology Glossary" in text_str
+        assert "Glossary" in text_str
         assert "Peak Burst" in text_str
         assert "Zombie Flag" in text_str
 

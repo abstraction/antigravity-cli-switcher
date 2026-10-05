@@ -25,7 +25,7 @@ class HelpModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="help-modal-dialog"):
-            yield Static("Keyboard Shortcuts Reference", classes="modal-title")
+            yield Static("Keybindings & Glossary", classes="modal-title")
             yield Static(self._build_help_text(), id="help-content")
             with Horizontal(classes="modal-buttons"):
                 yield Button("Close (Esc)", id="btn-close", variant="default")
@@ -79,14 +79,14 @@ class HelpModal(ModalScreen[None]):
                 t.append(f"  {key:<12}", style="bold #d29922")
                 t.append(f"{desc}\n", style="#e6edf3")
 
-        t.append("\nMetrics & Terminology Glossary\n", style="bold #58a6ff")
+        t.append("\nGlossary\n", style="bold #58a6ff")
         glossary: list[tuple[str, str]] = [
-            ("Peak Burst", "Maximum concurrent active accounts burning quota simultaneously"),
-            ("Gemini/Claude Burnt %", "Percentage of quota consumed across rolling 7-day window"),
-            ("Eff %", "Effective quota score based on bottleneck model (Gemini or Claude)"),
-            ("(S/W)", "Short (5-hour) and Weekly (7-day) quota window indicators"),
-            ("Min Headroom %", "Lowest remaining quota safety margin before rate limit triggers"),
-            ("Zombie Flag", "Paid account ($20/mo) with 0% 7-day duty cycle"),
+            ("Peak Burst", "Max concurrent active accounts burning quota simultaneously"),
+            ("Burnt %", "Total quota percentage consumed over 7 days"),
+            ("Eff %", "Quota score limited by bottleneck model"),
+            ("(S/W)", "5-hour short and 7-day weekly quota windows"),
+            ("Min Headroom %", "Lowest recorded quota percentage before reset"),
+            ("Zombie Flag", "Paid account with 0% 7-day duty cycle"),
         ]
         for term, explanation in glossary:
             t.append(f"  {term:<23}", style="bold #bc8cff")
