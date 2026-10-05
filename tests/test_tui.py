@@ -137,33 +137,33 @@ async def test_dashboard_screen_pilot(temp_paths: ManagerPaths, monkeypatch: pyt
         assert tabs.active == "tab-accounts"
 
         await pilot.press("2")
-        assert tabs.active == "tab-logs"
+        assert tabs.active == "tab-fleet"
 
         await pilot.press("3")
-        assert tabs.active == "tab-history"
+        assert tabs.active == "tab-logs"
 
         await pilot.press("4")
-        assert tabs.active == "tab-hygiene"
+        assert tabs.active == "tab-history"
 
         await pilot.press("5")
-        assert tabs.active == "tab-proxies"
+        assert tabs.active == "tab-hygiene"
 
         await pilot.press("6")
-        assert tabs.active == "tab-fleet"
+        assert tabs.active == "tab-proxies"
 
         # Test tab navigation with [ and ]
         await pilot.press("]")
         assert tabs.active == "tab-accounts"
 
         await pilot.press("[")
-        assert tabs.active == "tab-fleet"
+        assert tabs.active == "tab-proxies"
 
         # Test tab navigation with Left and Right arrow keys
         await pilot.press("right")
         assert tabs.active == "tab-accounts"
 
         await pilot.press("right")
-        assert tabs.active == "tab-logs"
+        assert tabs.active == "tab-fleet"
 
         await pilot.press("left")
         assert tabs.active == "tab-accounts"
@@ -225,8 +225,12 @@ async def test_dashboard_arrow_navigation_and_tab_switching(
         await pilot.press("up")
         await pilot.pause()
 
-        # Tab navigation with right arrow (Accounts -> Logs -> History -> Hygiene -> Proxies)
+        # Tab navigation with right arrow (Accounts -> Fleet -> Logs -> History -> Hygiene -> Proxies)
         assert tabs.active == "tab-accounts"
+        await pilot.press("right")
+        await pilot.pause()
+        assert tabs.active == "tab-fleet"
+
         await pilot.press("right")
         await pilot.pause()
         assert tabs.active == "tab-logs"
@@ -243,14 +247,10 @@ async def test_dashboard_arrow_navigation_and_tab_switching(
         await pilot.pause()
         assert tabs.active == "tab-proxies"
 
-        await pilot.press("right")
-        await pilot.pause()
-        assert tabs.active == "tab-fleet"
-
-        # Tab navigation with left arrow (Fleet -> Proxies)
+        # Tab navigation with left arrow (Proxies -> Hygiene)
         await pilot.press("left")
         await pilot.pause()
-        assert tabs.active == "tab-proxies"
+        assert tabs.active == "tab-hygiene"
 
 
 @pytest.mark.asyncio
@@ -362,20 +362,26 @@ async def test_tab_switch_focus_restoration(temp_paths: ManagerPaths, monkeypatc
         account_table = screen.query_one("#account-table", AccountTable)
         assert screen.focused == account_table
 
-        # Switch to Logs tab via '2'
+        # Switch to Fleet tab via '2'
         await pilot.press("2")
+        await pilot.pause()
+        fleet_table = screen.query_one("#fleet-table", DataTable)
+        assert screen.focused == fleet_table
+
+        # Switch to Logs tab via '3'
+        await pilot.press("3")
         await pilot.pause()
         logs_log = screen.query_one("#logs-rich-log")
         assert screen.focused == logs_log
 
-        # Switch to History tab via '3'
-        await pilot.press("3")
+        # Switch to History tab via '4'
+        await pilot.press("4")
         await pilot.pause()
         history_table = screen.query_one("#history-table", DataTable)
         assert screen.focused == history_table
 
-        # Switch to Hygiene tab via '4'
-        await pilot.press("4")
+        # Switch to Hygiene tab via '5'
+        await pilot.press("5")
         await pilot.pause()
         hygiene_table = screen.query_one("#hygiene-table", DataTable)
         assert screen.focused == hygiene_table
@@ -412,20 +418,20 @@ async def test_lazy_tab_dirty_tracking(temp_paths: ManagerPaths, monkeypatch: py
         assert screen._logs_dirty is True
         assert screen._fleet_dirty is True
 
-        # Switch to tab-logs
+        # Switch to tab-fleet
         await pilot.press("2")
+        await pilot.pause()
+        assert screen._fleet_dirty is False
+
+        # Switch to tab-logs
+        await pilot.press("3")
         await pilot.pause()
         assert screen._logs_dirty is False
 
         # Switch to tab-hygiene
-        await pilot.press("4")
+        await pilot.press("5")
         await pilot.pause()
         assert screen._hygiene_dirty is False
-
-        # Switch to tab-fleet
-        await pilot.press("6")
-        await pilot.pause()
-        assert screen._fleet_dirty is False
 
 
 def test_concurrency_guard_prevents_duplicate_refresh(temp_paths: ManagerPaths) -> None:
@@ -496,8 +502,8 @@ async def test_dashboard_hygiene_relogin_flow(temp_paths: ManagerPaths, monkeypa
         assert isinstance(screen, DashboardScreen)
         await pilot.pause()
 
-        # Switch to Hygiene tab via '4'
-        await pilot.press("4")
+        # Switch to Hygiene tab via '5'
+        await pilot.press("5")
         await pilot.pause()
 
         hygiene_tab = screen.query_one("#hygiene-tab", HygieneTab)

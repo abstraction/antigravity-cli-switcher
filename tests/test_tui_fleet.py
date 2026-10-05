@@ -332,7 +332,7 @@ async def test_fleet_tab_enter_activation(monkeypatch: pytest.MonkeyPatch) -> No
         await pilot.pause()
 
         # Switch to fleet tab
-        await pilot.press("6")
+        await pilot.press("2")
         await pilot.pause()
 
         # Focus fleet table and press enter on the highlighted row
