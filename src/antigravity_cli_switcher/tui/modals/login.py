@@ -33,9 +33,7 @@ class LoginModal(ModalScreen[tuple[str, str | None] | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="modal-dialog"):
-            title = (
-                f"Fix / Relog in: {self.initial_name}" if self.is_relogin and self.initial_name else "Log in account"
-            )
+            title = f"Relogin: {self.initial_name}" if self.is_relogin and self.initial_name else "Add account"
             yield Static(title, classes="modal-title")
             yield Label("Account name:")
             yield Input(
@@ -44,10 +42,10 @@ class LoginModal(ModalScreen[tuple[str, str | None] | None]):
                 id="login-name",
             )
             yield Label("Custom agy binary (optional):")
-            yield Input(placeholder="Blank to auto-detect agy", id="login-binary")
+            yield Input(placeholder="Leave blank to auto-detect agy", id="login-binary")
             with Horizontal(classes="modal-buttons"):
                 yield Button("Cancel", id="btn-cancel", variant="default")
-                submit_label = "Relog in" if self.is_relogin else "Log in"
+                submit_label = "Relogin" if self.is_relogin else "Login"
                 yield Button(submit_label, id="btn-submit", variant="warning" if self.is_relogin else "success")
 
     def on_mount(self) -> None:

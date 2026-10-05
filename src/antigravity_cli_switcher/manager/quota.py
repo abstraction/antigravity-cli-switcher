@@ -13,6 +13,7 @@ from antigravity_cli_switcher.manager.cloudcode import (
     CODE_ASSIST_QUOTA_SUMMARY_PATH,
     CODE_ASSIST_USER_AGENT,
     _cloudcode_request,
+    _extract_project_id,
     _google_userinfo_request,
     _parse_quota_families_from_summary,
     format_plan_type_compact,
@@ -32,8 +33,6 @@ from antigravity_cli_switcher.manager.models_catalog import _run_agy_models_comm
 from antigravity_cli_switcher.manager.native_quota import _fetch_native_quota
 from antigravity_cli_switcher.manager.paths import (
     ManagerPaths,
-    _project_id_path,
-    _read_text_if_exists,
     account_dir,
     resolve_agy_binary,
 )
@@ -52,7 +51,10 @@ from antigravity_cli_switcher.manager.state import (
     sync_state_from_disk,
     utc_now,
 )
-from antigravity_cli_switcher.manager.verification import is_ineligible_error
+from antigravity_cli_switcher.manager.verification import (
+    _persist_refresh_failure,
+    is_ineligible_error,
+)
 from antigravity_cli_switcher.models import FreshToken, HealthStatus
 
 
@@ -73,28 +75,6 @@ class UsageRefreshResult:
     usage_families: dict
     bucket_count: int
     backend: str = "native"
-
-
-def _persist_project_id(home_root: Path, project_id: str | None) -> None:
-    if not project_id:
-        return
-    path = _project_id_path(home_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(project_id.strip() + "\n", encoding="utf-8")
-
-
-def _extract_project_id(load_response: dict, home_root: Path) -> str | None:
-    project = load_response.get("cloudaicompanionProject")
-    if isinstance(project, str) and project.strip():
-        _persist_project_id(home_root, project.strip())
-        return project.strip()
-    if isinstance(project, dict):
-        project_id = project.get("id")
-        if isinstance(project_id, str) and project_id.strip():
-            _persist_project_id(home_root, project_id.strip())
-            return project_id.strip()
-    cached = _read_text_if_exists(_project_id_path(home_root))
-    return cached.strip() if isinstance(cached, str) and cached.strip() else None
 
 
 def _run_agy_warmup(home_root: Path, agy_binary: str | None, timeout_seconds: int) -> None:
@@ -141,32 +121,6 @@ def _resolve_usage_refresh_target(paths: ManagerPaths, state: dict, name: str | 
             return account_name, live_dir.parent
         return account_name, paths.runtime_dir
     return account_name, account_dir(paths, account_name)
-
-
-def _persist_refresh_failure(paths: ManagerPaths, name: str, error_message: str) -> None:
-    now_dt = utc_now()
-    now_iso = now_dt.isoformat()
-    with manager_lock(paths):
-        state = sync_state_from_disk(paths, load_state(paths))
-        meta = state["accounts"].get(name)
-        if meta is None:
-            return
-        meta["last_live_check_at"] = now_iso
-        meta["last_live_check_error"] = error_message
-        fail_count = int(meta.get("refresh_fail_count", 0) or 0) + 1
-        meta["refresh_fail_count"] = fail_count
-        policy_seconds = int(meta.get("refresh_policy_seconds", 300) or 300)
-        delay_seconds = min(policy_seconds, 60 * (2 ** min(fail_count - 1, 3)))
-        meta["next_live_check_at"] = (now_dt + timedelta(seconds=max(60, delay_seconds))).isoformat()
-        if "Token mismatch" in error_message:
-            meta["health_status"] = "token_mismatch"
-        elif "Duplicate token" in error_message:
-            meta["health_status"] = "token_duplicate"
-        elif is_ineligible_error(error_message):
-            meta["health_status"] = "ineligible"
-        else:
-            meta["health_status"] = "refresh_failed"
-        save_state(paths, state)
 
 
 def _refresh_token_http(source_home: Path) -> bool:
@@ -342,6 +296,10 @@ def _apply_usage_refresh_success(
             meta["next_live_check_at"] = next_check.isoformat()
         else:
             meta["next_live_check_at"] = None
+
+        from antigravity_cli_switcher.manager.utilization import record_quota_refresh
+
+        record_quota_refresh(state, account_name, usage_families, now=now_dt)
         meta["usage_families"] = usage_families
         meta["last_quota_backend"] = backend
         _sync_legacy_usage_fields(meta)

@@ -11,6 +11,7 @@ from antigravity_cli_switcher.manager import (
     candidates,
     cloudcode,
     failover,
+    fleet_analytics,
     history,
     hygiene,
     identity,
@@ -24,6 +25,7 @@ from antigravity_cli_switcher.manager import (
     quota,
     routing,
     state,
+    utilization,
     verification,
 )
 from antigravity_cli_switcher.manager.accounts import (
@@ -153,6 +155,13 @@ from antigravity_cli_switcher.manager.state import (
     sync_state_from_disk,
     utc_now,
 )
+from antigravity_cli_switcher.manager.utilization import (
+    compute_fleet_insight,
+    prune_and_rollover_buckets,
+    reconcile_active_duty,
+    record_quota_refresh,
+    set_account_cost,
+)
 
 DEFAULT_SWITCH_STRATEGY = DEFAULT_CANDIDATE_STRATEGY
 DEFAULT_FALLBACK_STRATEGY = DEFAULT_FAMILY_FALLBACK_STRATEGY
@@ -217,6 +226,7 @@ __all__ = [
     "clear_account_proxy",
     "clear_bad",
     "cloudcode",
+    "compute_fleet_insight",
     "default_live_dir",
     "default_root",
     "delete_account",
@@ -225,6 +235,7 @@ __all__ = [
     "ensure_layout",
     "failover",
     "fix_hygiene",
+    "fleet_analytics",
     "format_plan_type_compact",
     "format_plan_type_label",
     "format_status",
@@ -257,7 +268,10 @@ __all__ = [
     "probe_profile_identity_via_usage",
     "profiles",
     "proxies",
+    "prune_and_rollover_buckets",
     "quota",
+    "reconcile_active_duty",
+    "record_quota_refresh",
     "refresh_account_identity",
     "refresh_account_usage",
     "refresh_due_account",
@@ -271,6 +285,7 @@ __all__ = [
     "routing",
     "save_account_profile",
     "save_state",
+    "set_account_cost",
     "set_account_proxy",
     "set_enabled",
     "set_expected_email",
@@ -285,6 +300,7 @@ __all__ = [
     "update_account_runtime_metadata",
     "update_switch_policy",
     "utc_now",
+    "utilization",
     "verification",
     "verify_account",
     "verify_accounts",

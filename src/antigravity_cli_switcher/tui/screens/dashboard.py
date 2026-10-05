@@ -19,6 +19,7 @@ from antigravity_cli_switcher.tui.modals import HelpModal
 from antigravity_cli_switcher.tui.screens.dashboard_actions import DashboardActionsScreenBase
 from antigravity_cli_switcher.tui.widgets.account_table import AccountTable
 from antigravity_cli_switcher.tui.widgets.detail_panel import DetailPanel
+from antigravity_cli_switcher.tui.widgets.fleet_tab import FleetTab
 from antigravity_cli_switcher.tui.widgets.header_bar import HeaderBar
 from antigravity_cli_switcher.tui.widgets.history_tab import HistoryTab
 from antigravity_cli_switcher.tui.widgets.hygiene_tab import HygieneTab
@@ -37,6 +38,7 @@ class DashboardScreen(DashboardActionsScreenBase):
 
     TAB_IDS: ClassVar[list[str]] = [
         "tab-accounts",
+        "tab-fleet",
         "tab-logs",
         "tab-history",
         "tab-hygiene",
@@ -45,21 +47,22 @@ class DashboardScreen(DashboardActionsScreenBase):
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("1", "switch_tab('tab-accounts')", "Accounts", show=False),
-        Binding("2", "switch_tab('tab-logs')", "Logs", show=False),
-        Binding("3", "switch_tab('tab-history')", "History", show=False),
-        Binding("4", "switch_tab('tab-hygiene')", "Hygiene", show=False),
-        Binding("5", "switch_tab('tab-proxies')", "Proxies", show=False),
+        Binding("2", "switch_tab('tab-fleet')", "Fleet", show=False),
+        Binding("3", "switch_tab('tab-logs')", "Logs", show=False),
+        Binding("4", "switch_tab('tab-history')", "History", show=False),
+        Binding("5", "switch_tab('tab-hygiene')", "Hygiene", show=False),
+        Binding("6", "switch_tab('tab-proxies')", "Proxies", show=False),
         Binding("left", "prev_tab", "Prev Tab", show=False, priority=True),
         Binding("right", "next_tab", "Next Tab", show=False, priority=True),
         Binding("[", "prev_tab", "Prev Tab", show=False),
         Binding("]", "next_tab", "Next Tab", show=False),
-        Binding("enter", "activate", "Activate"),
-        Binding("a", "activate", "Activate", show=False),
+        Binding("enter", "activate", "Switch"),
+        Binding("a", "activate", "Switch", show=False),
         Binding("l", "relogin", "Relogin"),
         Binding("n", "new_login", "New", show=False),
         Binding("i", "import_profile", "Import", show=False),
         Binding("r", "switch_next", "Next"),
-        Binding("e", "toggle_enabled", "Toggle", show=False),
+        Binding("e", "toggle_enabled", "Enable", show=True),
         Binding("c", "clear_bad", "Clear", show=False),
         Binding("m", "mark_bad", "Flag", show=False),
         Binding("f2", "rename", "Rename", show=False),
@@ -100,24 +103,27 @@ class DashboardScreen(DashboardActionsScreenBase):
         self._history_dirty: bool = True
         self._logs_dirty: bool = True
         self._proxy_dirty: bool = True
+        self._fleet_dirty: bool = True
 
     def compose(self) -> ComposeResult:
         yield HeaderBar(id="header-bar")
         with TabbedContent(initial=self.initial_tab, id="main-tabs"):
-            with TabPane("Accounts", id="tab-accounts"):
+            with TabPane("1 Accounts", id="tab-accounts"):
                 yield AccountTable(id="account-table")
                 yield DetailPanel(id="detail-panel")
-            with TabPane("Logs", id="tab-logs"):
+            with TabPane("2 Fleet", id="tab-fleet"):
+                yield FleetTab(id="fleet-tab")
+            with TabPane("3 Logs", id="tab-logs"):
                 yield LogsTab(id="logs-tab")
-            with TabPane("History", id="tab-history"):
+            with TabPane("4 History", id="tab-history"):
                 yield HistoryTab(id="history-tab")
-            with TabPane("Hygiene", id="tab-hygiene"):
+            with TabPane("5 Hygiene", id="tab-hygiene"):
                 yield HygieneTab(id="hygiene-tab")
-            with TabPane("Proxies", id="tab-proxies"):
+            with TabPane("6 Proxies", id="tab-proxies"):
                 yield ProxyTab(id="proxy-tab")
         with Vertical(id="bottom-container"):
-            yield Footer()
             yield StatusBar(id="status-bar")
+            yield Footer()
 
     def on_mount(self) -> None:
         if self.initial_tab == "tab-accounts":
@@ -155,6 +161,11 @@ class DashboardScreen(DashboardActionsScreenBase):
             if self._proxy_dirty and self.snapshot:
                 self.query_one("#proxy-tab", ProxyTab).update_proxies(self.snapshot)
                 self._proxy_dirty = False
+        elif pane_id == "tab-fleet":
+            self.query_one("#fleet-table", DataTable).focus()
+            if self._fleet_dirty and self.snapshot:
+                self.query_one("#fleet-tab", FleetTab).update_fleet(self.snapshot)
+                self._fleet_dirty = False
 
     @property
     def acs_app(self) -> ACSApp:
@@ -180,6 +191,7 @@ class DashboardScreen(DashboardActionsScreenBase):
         self._history_dirty = active_tab != "tab-history"
         self._logs_dirty = active_tab != "tab-logs"
         self._proxy_dirty = active_tab != "tab-proxies"
+        self._fleet_dirty = active_tab != "tab-fleet"
 
         if active_tab == "tab-accounts":
             table = self.query_one("#account-table", AccountTable)
@@ -193,6 +205,8 @@ class DashboardScreen(DashboardActionsScreenBase):
             self.query_one("#logs-tab", LogsTab).poll_new_logs()
         elif active_tab == "tab-proxies":
             self.query_one("#proxy-tab", ProxyTab).update_proxies(self.snapshot)
+        elif active_tab == "tab-fleet":
+            self.query_one("#fleet-tab", FleetTab).update_fleet(self.snapshot)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """Update detail panel when account selection changes in the account table."""
@@ -200,8 +214,8 @@ class DashboardScreen(DashboardActionsScreenBase):
             self._update_detail_from_selection()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Trigger account activation when a row is selected via Enter or click in the account table."""
-        if event.data_table.id == "account-table":
+        """Trigger account activation when a row is selected via Enter or click in the account or fleet table."""
+        if event.data_table.id in ("account-table", "fleet-table"):
             row_key_val = str(event.row_key.value) if event.row_key and event.row_key.value is not None else None
             self.action_activate(row_key_val)
 
@@ -214,9 +228,14 @@ class DashboardScreen(DashboardActionsScreenBase):
         if name and name in self.snapshot.accounts:
             meta = self.snapshot.accounts[name]
             ver = self.verification.accounts.get(name) if self.verification else None
-            detail.update_detail(name, meta, ver)
+            util = (
+                self.snapshot.fleet_utilization.accounts.get(name)
+                if self.snapshot.fleet_utilization and name in self.snapshot.fleet_utilization.accounts
+                else None
+            )
+            detail.update_detail(name, meta, ver, util)
         else:
-            detail.update_detail(None, None, None)
+            detail.update_detail(None, None, None, None)
 
     def _selected_account_name(self) -> str | None:
         tabs = self.query_one("#main-tabs", TabbedContent)
@@ -225,6 +244,8 @@ class DashboardScreen(DashboardActionsScreenBase):
             return self.query_one("#hygiene-tab", HygieneTab).get_selected_account_name()
         if cur == "tab-proxies":
             return self.query_one("#proxy-tab", ProxyTab).get_selected_account_name()
+        if cur == "tab-fleet":
+            return self.query_one("#fleet-tab", FleetTab).get_selected_account_name()
         table = self.query_one("#account-table", AccountTable)
         return table.get_selected_account_name()
 

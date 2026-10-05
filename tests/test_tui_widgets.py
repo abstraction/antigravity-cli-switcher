@@ -11,6 +11,7 @@ from textual.widgets import DataTable, Static
 from antigravity_cli_switcher.manager import ManagerPaths
 from antigravity_cli_switcher.models import (
     AccountMeta,
+    AccountUtilizationRecord,
     AccountVerification,
     HealthStatus,
     ProblemStatus,
@@ -194,6 +195,78 @@ async def test_detail_panel_update() -> None:
         panel.update_detail("gamma", gamma_meta, gamma_ver)
         rendered_gamma = str(content_static.content)
         assert "Synthetic token (fix needed)" in rendered_gamma
+
+
+@pytest.mark.asyncio
+async def test_detail_panel_utilization_and_zombie() -> None:
+    panel = DetailPanel()
+    snapshot, verification = create_sample_snapshot()
+
+    class PanelApp(ACSApp):
+        def compose(self):
+            yield panel
+
+    paths = ManagerPaths(
+        root=Path("/tmp"),
+        accounts_dir=Path("/tmp/acc"),
+        state_file=Path("/tmp/state.json"),
+        runtime_dir=Path("/tmp/run"),
+        lock_file=Path("/tmp/lock"),
+    )
+    app = PanelApp(paths=paths)
+    async with app.run_test():
+        meta = snapshot.accounts["alpha"]
+        ver = verification.accounts["alpha"]
+        util = AccountUtilizationRecord(
+            rolling_7d_active_seconds=3600,
+            rolling_7d_gemini_consumed=45.0,
+            rolling_7d_other_consumed=20.0,
+            rolling_7d_min_gemini_headroom=55.0,
+            rolling_7d_min_other_headroom=80.0,
+            is_zombie=True,
+            monthly_cost_usd=25.0,
+        )
+        panel.update_detail("alpha", meta, ver, util)
+        content_static = panel.query_one("#detail-content", Static)
+        rendered = str(content_static.content)
+        assert "7D Duty" in rendered
+        assert "Burnt" in rendered
+        assert "G:45%" in rendered
+        assert "O:20%" in rendered
+        assert "ZOMBIE" not in rendered
+        assert "$25/mo waste" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_account_table_health_column_strictly_operational() -> None:
+    table = AccountTable()
+    snapshot, verification = create_sample_snapshot()
+
+    class TableApp(ACSApp):
+        def compose(self):
+            yield table
+
+    paths = ManagerPaths(
+        root=Path("/tmp"),
+        accounts_dir=Path("/tmp/acc"),
+        state_file=Path("/tmp/state.json"),
+        runtime_dir=Path("/tmp/run"),
+        lock_file=Path("/tmp/lock"),
+    )
+    app = TableApp(paths=paths)
+    async with app.run_test():
+        # Even with zombie accounts, AccountTable strictly displays operational health
+        snapshot.fleet_utilization.accounts["gamma"] = AccountUtilizationRecord(is_zombie=True, monthly_cost_usd=20.0)
+        snapshot.fleet_utilization.accounts["alpha"] = AccountUtilizationRecord(is_zombie=True, monthly_cost_usd=20.0)
+        table.update_accounts(snapshot, verification, sort_mode="name")
+
+        gamma_texts = [str(cell) for cell in table.get_row("gamma")]
+        assert not any("ZOMBIE" in t for t in gamma_texts)
+        assert any("SYNTHE" in t for t in gamma_texts)
+
+        alpha_texts = [str(cell) for cell in table.get_row("alpha")]
+        assert not any("ZOMBIE" in t for t in alpha_texts)
+        assert any("OK" in t for t in alpha_texts)
 
 
 @pytest.mark.asyncio

@@ -65,11 +65,11 @@ class HistoryTab(Widget):
 
         summary_text = Text()
         summary_text.append("Switch log: ", style="bold")
-        summary_text.append(f"{total_events} events", style="bold cyan")
-        summary_text.append(" │ Active: ", style="dim")
-        summary_text.append(snapshot.active or "-", style="bold green")
-        summary_text.append(" │ Mode: ", style="dim")
-        summary_text.append(snapshot.switch_mode.upper(), style="bold yellow")
+        summary_text.append(f"{total_events} events", style="bold #4897d4")
+        summary_text.append(" ╎ Active: ", style="dim")
+        summary_text.append(snapshot.active or "-", style="bold #77ca9b")
+        summary_text.append(" ╎ Mode: ", style="dim")
+        summary_text.append(snapshot.switch_mode.upper(), style="bold #cbc06c")
         summary.update(summary_text)
 
         if total_events == self._last_history_len and snapshot.active == self._last_active:
@@ -84,18 +84,18 @@ class HistoryTab(Widget):
         # Show most recent events first
         for idx, event in enumerate(reversed(history), start=1):
             idx_text = Text(str(idx), style="dim")
-            ts_text = Text(event.at or "-", style="cyan")
+            ts_text = Text(event.at or "-", style="#4897d4")
             from_text = Text(event.previous_active or "-", style="dim")
             to_acc = event.switched_to or event.active or "-"
-            to_text = Text(to_acc, style="bold green" if to_acc == snapshot.active else "white")
+            to_text = Text(to_acc, style="bold #77ca9b" if to_acc == snapshot.active else "#cccccc")
 
             outcome = event.outcome or "unknown"
             if outcome == "success":
-                outcome_text = Text("SUCCESS", style="bold green")
+                outcome_text = Text("SUCCESS", style="bold #77ca9b")
             elif outcome in ("failed", "error"):
-                outcome_text = Text("FAILED", style="bold red")
+                outcome_text = Text("FAILED", style="bold #dc4c4c")
             else:
-                outcome_text = Text(outcome.upper(), style="yellow")
+                outcome_text = Text(outcome.upper(), style="bold #cbc06c")
 
             trigger_text = Text(event.trigger or "-", style="magenta")
             reason_text = Text(event.reason or "-", style="white")

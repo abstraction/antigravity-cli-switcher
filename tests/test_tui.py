@@ -137,15 +137,18 @@ async def test_dashboard_screen_pilot(temp_paths: ManagerPaths, monkeypatch: pyt
         assert tabs.active == "tab-accounts"
 
         await pilot.press("2")
-        assert tabs.active == "tab-logs"
+        assert tabs.active == "tab-fleet"
 
         await pilot.press("3")
-        assert tabs.active == "tab-history"
+        assert tabs.active == "tab-logs"
 
         await pilot.press("4")
-        assert tabs.active == "tab-hygiene"
+        assert tabs.active == "tab-history"
 
         await pilot.press("5")
+        assert tabs.active == "tab-hygiene"
+
+        await pilot.press("6")
         assert tabs.active == "tab-proxies"
 
         # Test tab navigation with [ and ]
@@ -160,7 +163,7 @@ async def test_dashboard_screen_pilot(temp_paths: ManagerPaths, monkeypatch: pyt
         assert tabs.active == "tab-accounts"
 
         await pilot.press("right")
-        assert tabs.active == "tab-logs"
+        assert tabs.active == "tab-fleet"
 
         await pilot.press("left")
         assert tabs.active == "tab-accounts"
@@ -222,8 +225,12 @@ async def test_dashboard_arrow_navigation_and_tab_switching(
         await pilot.press("up")
         await pilot.pause()
 
-        # Tab navigation with right arrow (Accounts -> Logs -> History -> Hygiene -> Proxies)
+        # Tab navigation with right arrow (Accounts -> Fleet -> Logs -> History -> Hygiene -> Proxies)
         assert tabs.active == "tab-accounts"
+        await pilot.press("right")
+        await pilot.pause()
+        assert tabs.active == "tab-fleet"
+
         await pilot.press("right")
         await pilot.pause()
         assert tabs.active == "tab-logs"
@@ -355,20 +362,26 @@ async def test_tab_switch_focus_restoration(temp_paths: ManagerPaths, monkeypatc
         account_table = screen.query_one("#account-table", AccountTable)
         assert screen.focused == account_table
 
-        # Switch to Logs tab via '2'
+        # Switch to Fleet tab via '2'
         await pilot.press("2")
+        await pilot.pause()
+        fleet_table = screen.query_one("#fleet-table", DataTable)
+        assert screen.focused == fleet_table
+
+        # Switch to Logs tab via '3'
+        await pilot.press("3")
         await pilot.pause()
         logs_log = screen.query_one("#logs-rich-log")
         assert screen.focused == logs_log
 
-        # Switch to History tab via '3'
-        await pilot.press("3")
+        # Switch to History tab via '4'
+        await pilot.press("4")
         await pilot.pause()
         history_table = screen.query_one("#history-table", DataTable)
         assert screen.focused == history_table
 
-        # Switch to Hygiene tab via '4'
-        await pilot.press("4")
+        # Switch to Hygiene tab via '5'
+        await pilot.press("5")
         await pilot.pause()
         hygiene_table = screen.query_one("#hygiene-table", DataTable)
         assert screen.focused == hygiene_table
@@ -403,14 +416,20 @@ async def test_lazy_tab_dirty_tracking(temp_paths: ManagerPaths, monkeypatch: py
         assert screen._hygiene_dirty is True
         assert screen._history_dirty is True
         assert screen._logs_dirty is True
+        assert screen._fleet_dirty is True
+
+        # Switch to tab-fleet
+        await pilot.press("2")
+        await pilot.pause()
+        assert screen._fleet_dirty is False
 
         # Switch to tab-logs
-        await pilot.press("2")
+        await pilot.press("3")
         await pilot.pause()
         assert screen._logs_dirty is False
 
         # Switch to tab-hygiene
-        await pilot.press("4")
+        await pilot.press("5")
         await pilot.pause()
         assert screen._hygiene_dirty is False
 
@@ -483,8 +502,8 @@ async def test_dashboard_hygiene_relogin_flow(temp_paths: ManagerPaths, monkeypa
         assert isinstance(screen, DashboardScreen)
         await pilot.pause()
 
-        # Switch to Hygiene tab via '4'
-        await pilot.press("4")
+        # Switch to Hygiene tab via '5'
+        await pilot.press("5")
         await pilot.pause()
 
         hygiene_tab = screen.query_one("#hygiene-tab", HygieneTab)
@@ -560,3 +579,51 @@ async def test_dashboard_relogin_submission_flow(temp_paths: ManagerPaths, monke
         assert len(saved_calls) == 1
         assert saved_calls[0][0] == "alpha"
         assert saved_calls[0][2] is True  # overwrite_existing
+
+
+def test_dashboard_footer_bindings_copywriting() -> None:
+    from textual.binding import Binding
+
+    bindings = [b for b in DashboardScreen.BINDINGS if isinstance(b, Binding)]
+    binding_map = {b.key: b for b in bindings}
+    assert binding_map["enter"].description == "Switch"
+    assert binding_map["e"].description == "Enable"
+    assert binding_map["e"].show is True
+
+
+@pytest.mark.asyncio
+async def test_dashboard_activate_auto_enables_disabled_account(
+    temp_paths: ManagerPaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot, verification = create_sample_snapshot()
+    # Mark beta as disabled
+    snapshot.accounts["beta"].enabled = False
+
+    monkeypatch.setattr(
+        "antigravity_cli_switcher.tui.app.fetch_snapshot_data",
+        lambda paths: (snapshot, verification),
+    )
+    enabled_calls: list[tuple[str, bool]] = []
+    switched_calls: list[str] = []
+
+    def mock_set_enabled(paths: ManagerPaths, name: str, enabled: bool) -> None:
+        enabled_calls.append((name, enabled))
+
+    def mock_switch_account(paths: ManagerPaths, name: str) -> str:
+        switched_calls.append(name)
+        return name
+
+    monkeypatch.setattr("antigravity_cli_switcher.tui.screens.dashboard_actions.set_enabled", mock_set_enabled)
+    monkeypatch.setattr("antigravity_cli_switcher.tui.screens.dashboard.switch_account", mock_switch_account)
+
+    app = ACSApp(paths=temp_paths)
+    async with app.run_test() as pilot:
+        screen = pilot.app.screen
+        assert isinstance(screen, DashboardScreen)
+        await pilot.pause()
+
+        screen.action_activate("beta")
+        await pilot.pause()
+
+        assert ("beta", True) in enabled_calls
+        assert "beta" in switched_calls

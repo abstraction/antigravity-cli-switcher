@@ -1,56 +1,123 @@
-/* Textual CSS theme for antigravity-cli-switcher (ACS) */
+/* Textual CSS theme for antigravity-cli-switcher (ACS)
+ * btop-inspired high-density dashboard aesthetic with pure black background
+ */
 
-Screen {
-    background: $surface;
-    color: $text;
+* {
+    scrollbar-size-horizontal: 0;
+    scrollbar-size-vertical: 1;
+    scrollbar-color: #333333 #000000;
 }
 
+Screen {
+    background: #000000;
+    color: #cccccc;
+}
+
+/* Header bar: 1 line flush top bar */
 HeaderBar {
     dock: top;
-    height: 2;
-    background: $panel;
-    color: $text;
-    border-bottom: solid $primary;
+    height: 1;
+    min-height: 1;
+    background: #111111;
+    color: #eeeeee;
+    border: none;
     padding: 0 1;
 }
 
-#header-title {
-    text-style: bold;
-    color: $accent;
+#header-content {
+    height: 1;
+    color: #eeeeee;
 }
 
-#header-stats {
-    color: $text-muted;
-}
-
+/* Tabbed Navigation: 1 line flush tab bar */
 TabbedContent {
     height: 1fr;
 }
 
-TabPane {
-    height: 1fr;
+Tabs {
+    dock: top;
+    height: 1;
+    min-height: 1;
+    background: #000000;
+    border: none;
     padding: 0 1;
-}
-
-AccountTable {
-    height: 1fr;
-    border: round $primary-muted;
-    background: $surface;
     margin: 0;
 }
 
-AccountTable > .datatable--cursor {
-    background: $accent-muted;
-    color: $text;
+Tab {
+    height: 1;
+    min-height: 1;
+    padding: 0 1;
+    margin: 0 1 0 0;
+    border: none;
+    background: transparent;
+    color: #777777;
+}
+
+Tab:hover {
+    color: #ffffff;
+    background: #161616;
+}
+
+Tab.-active {
+    color: #58a6ff;
+    text-style: bold;
+    background: #1c2128;
+}
+
+Tabs Underline {
+    display: none;
+}
+
+ContentSwitcher {
+    border-top: solid #222222;
+}
+
+TabPane {
+    height: 1fr;
+    padding: 0;
+    margin: 0;
+}
+
+/* Primary Account Table: Borderless, high-density */
+AccountTable {
+    height: 1fr;
+    border: none;
+    background: #000000;
+    margin: 0;
+    padding: 0;
+    scrollbar-size-horizontal: 0;
+    scrollbar-size-vertical: 1;
+}
+
+AccountTable > .datatable--header {
+    background: #111111;
+    color: #888888;
     text-style: bold;
 }
 
+AccountTable > .datatable--cursor {
+    background: #162436;
+    color: #ffffff;
+    text-style: bold;
+}
+
+AccountTable > .datatable--odd-row {
+    background: #0a0a0a;
+}
+
+AccountTable > .datatable--even-row {
+    background: #000000;
+}
+
+/* Detail Panel: Integrated bottom inspection pane */
 DetailPanel {
     height: auto;
-    max-height: 10;
+    max-height: 12;
     min-height: 3;
-    border: round $primary;
-    background: $panel;
+    border: none;
+    border-top: solid #222222;
+    background: #080808;
     margin: 0;
     padding: 0 1;
 }
@@ -60,54 +127,119 @@ DetailPanel.collapsed {
 }
 
 #detail-title {
-    text-style: bold;
-    color: $accent;
-    border-bottom: solid $primary-muted;
-    margin-bottom: 0;
-}
-
-#detail-grid {
-    layout: grid;
-    grid-size: 2;
-    grid-columns: 1fr 1fr;
-    height: 1fr;
-}
-
-.detail-row {
     height: 1;
-    color: $text;
-}
-
-.detail-label {
     text-style: bold;
-    color: $text-muted;
-    width: 14;
+    color: #77ca9b;
+    border: none;
+    margin: 0;
+    padding: 0;
 }
 
-/* Tabs: Proxy, Hygiene, History */
-ProxyTab, HygieneTab, HistoryTab, LogsTab {
+#detail-content {
+    color: #cccccc;
+}
+
+/* Secondary Tabs: Fleet, Hygiene, History, Proxies */
+ProxyTab, HygieneTab, HistoryTab, LogsTab, FleetTab {
     height: 1fr;
+    padding: 0;
+    margin: 0;
 }
 
 #proxy-summary, #hygiene-summary, #history-summary {
-    height: 3;
-    background: $panel;
-    border: round $primary-muted;
+    height: 1;
+    min-height: 1;
+    background: #111111;
+    border: none;
+    border-bottom: solid #222222;
     padding: 0 1;
-    margin-top: 1;
+    margin: 0;
+    color: #cccccc;
 }
 
-#proxy-table, #hygiene-table, #history-table {
+#fleet-summary {
+    height: auto;
+    min-height: 1;
+    max-height: 2;
+    background: #111111;
+    border: none;
+    border-bottom: solid #222222;
+    padding: 0 1;
+    margin: 0;
+    color: #cccccc;
+}
+
+#fleet-legend {
+    height: 1;
+    min-height: 1;
+    background: #0a0a0a;
+    border: none;
+    padding: 0 1;
+    color: #777777;
+}
+
+#fleet-recommendation {
+    height: auto;
+    min-height: 1;
+    max-height: 2;
+    background: #111111;
+    border: none;
+    border-top: solid #222222;
+    padding: 0 1;
+    margin: 0;
+    color: #cccccc;
+}
+
+#proxy-table, #hygiene-table, #history-table, #fleet-table {
     height: 1fr;
-    border: round $primary-muted;
-    background: $surface;
-    margin-top: 1;
+    border: none;
+    background: #000000;
+    margin: 0;
+    padding: 0;
+    scrollbar-size-horizontal: 0;
+    scrollbar-size-vertical: 1;
+}
+
+#proxy-table > .datatable--header,
+#hygiene-table > .datatable--header,
+#history-table > .datatable--header,
+#fleet-table > .datatable--header {
+    background: #111111;
+    color: #888888;
+    text-style: bold;
+}
+
+#proxy-table > .datatable--cursor,
+#hygiene-table > .datatable--cursor,
+#history-table > .datatable--cursor,
+#fleet-table > .datatable--cursor {
+    background: #162436;
+    color: #ffffff;
+    text-style: bold;
+}
+
+#proxy-table > .datatable--odd-row,
+#hygiene-table > .datatable--odd-row,
+#history-table > .datatable--odd-row,
+#fleet-table > .datatable--odd-row {
+    background: #0a0a0a;
+}
+
+#proxy-table > .datatable--even-row,
+#hygiene-table > .datatable--even-row,
+#history-table > .datatable--even-row,
+#fleet-table > .datatable--even-row {
+    background: #000000;
 }
 
 #proxy-actions, #hygiene-actions {
-    height: 3;
+    height: 1;
+    min-height: 1;
     align: right middle;
-    margin-top: 1;
+    margin: 0;
+    padding: 0 1;
+    background: #000000;
+    border: none;
 }
 
 #proxy-actions Button, #hygiene-actions Button {
@@ -117,10 +249,12 @@ ProxyTab, HygieneTab, HistoryTab, LogsTab {
 /* Tab: Logs */
 #logs-filter-bar {
     height: 1;
+    min-height: 1;
     align: left middle;
-    background: transparent;
-    padding: 0;
-    margin: 1 0 0 0;
+    background: #111111;
+    border-bottom: solid #222222;
+    padding: 0 1;
+    margin: 0;
 }
 
 #logs-filter-bar Button {
@@ -134,53 +268,163 @@ ProxyTab, HygieneTab, HistoryTab, LogsTab {
 
 #logs-filter-label {
     text-style: bold;
-    color: $accent;
+    color: #58a6ff;
     width: auto;
     margin-right: 1;
 }
 
 #logs-path-info {
-    color: $text-muted;
+    color: #777777;
     width: auto;
     margin-left: 2;
 }
 
 #logs-rich-log {
     height: 1fr;
-    border: round $primary-muted;
-    background: $surface;
-    margin-top: 1;
+    border: none;
+    background: #000000;
+    margin: 0;
+    padding: 0 1;
 }
 
+/* Global Interactive Controls */
+Button {
+    height: 1;
+    min-height: 1;
+    border: none;
+    padding: 0 2;
+    background: #222222;
+    color: #cccccc;
+}
+
+Button:hover {
+    background: #333333;
+    color: #ffffff;
+}
+
+Button:focus {
+    background: #1f6feb;
+    color: #ffffff;
+    text-style: bold;
+}
+
+Button.-primary {
+    background: #1b281f;
+    color: #77ca9b;
+}
+
+Button.-primary:hover {
+    background: #26402d;
+    color: #ffffff;
+}
+
+Button.-error {
+    background: #2d1818;
+    color: #dc4c4c;
+}
+
+Button.-error:hover {
+    background: #472121;
+    color: #ffffff;
+}
+
+Button.-warning {
+    background: #2d2a18;
+    color: #cbc06c;
+}
+
+Button.-warning:hover {
+    background: #474021;
+    color: #ffffff;
+}
+
+Input {
+    height: 1;
+    min-height: 1;
+    border: none;
+    background: #000000;
+    color: #cccccc;
+    padding: 0 1;
+}
+
+Input:focus {
+    background: #111111;
+    color: #ffffff;
+}
+
+Select {
+    height: 1;
+    min-height: 1;
+    border: none;
+    background: #222222;
+    color: #cccccc;
+}
+
+/* Bottom Bar: Unified Footer and Status */
 #bottom-container {
     dock: bottom;
     height: auto;
-}
-
-Footer {
-    dock: none;
-    height: 1;
-    background: $panel;
-    color: $text;
+    background: #111111;
+    border-top: solid #222222;
 }
 
 StatusBar {
     dock: none;
     height: 1;
-    background: $panel;
-    color: $text-muted;
+    min-height: 1;
+    background: transparent;
+    color: #888888;
     padding: 0 1;
 }
 
 #status-message {
-    color: $accent;
+    color: #888888;
+}
+
+Footer {
+    dock: none;
+    height: 1;
+    min-height: 1;
+    background: transparent;
+    color: #777777;
+    scrollbar-size: 0 0;
+}
+
+FooterKey {
+    background: transparent;
+    margin: 0 1 0 0;
+}
+
+FooterKey .footer-key--key {
+    color: #58a6ff;
+    background: #222222;
     text-style: bold;
+    padding: 0 1;
+}
+
+FooterKey .footer-key--description {
+    color: #777777;
+    background: transparent;
+    padding: 0 1 0 0;
+}
+
+FooterKey:hover .footer-key--key {
+    color: #ffffff;
+    background: #1f6feb;
+}
+
+FooterKey:hover .footer-key--description {
+    color: #f0f6fc;
+}
+
+FooterKey.-command-palette {
+    display: none;
 }
 
 /* Modals */
 ModalScreen {
     align: center middle;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.85);
 }
 
 .modal-dialog {
@@ -188,8 +432,8 @@ ModalScreen {
     max-width: 95%;
     height: auto;
     overflow-y: auto;
-    border: thick $primary;
-    background: $panel;
+    border: solid #333333;
+    background: #111111;
     padding: 1 2;
 }
 
@@ -199,22 +443,23 @@ ModalScreen {
     max-height: 90%;
     height: auto;
     overflow-y: auto;
-    border: thick $primary;
-    background: $panel;
+    border: solid #333333;
+    background: #111111;
     padding: 1 2;
 }
 
 .modal-title {
     text-align: center;
     text-style: bold;
-    color: $accent;
+    color: #58a6ff;
     margin-bottom: 1;
 }
 
 .modal-buttons {
     margin-top: 1;
     align: right middle;
-    height: 3;
+    height: 1;
+    min-height: 1;
 }
 
 .modal-buttons Button {
@@ -222,9 +467,12 @@ ModalScreen {
 }
 
 .error-label {
-    color: $error;
+    color: #dc4c4c;
     text-style: bold;
     height: 1;
     margin-top: 1;
 }
 
+Tooltip {
+    display: none;
+}

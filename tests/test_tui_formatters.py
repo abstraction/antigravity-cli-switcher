@@ -18,6 +18,12 @@ from antigravity_cli_switcher.tui.formatters import (
     format_next_refresh,
     format_problem_summary,
 )
+from antigravity_cli_switcher.tui.theme import (
+    format_colored_model_usage,
+    format_meter_bar,
+    format_rich_window_summary,
+    render_meter_bar,
+)
 from tests.conftest import ORIGINAL_START_DUE_WATCHER
 
 
@@ -108,6 +114,97 @@ class TUIFormattersTests(unittest.TestCase):
             refresh_policy_seconds=300,
         )
         self.assertEqual(format_next_refresh(meta_disabled, now), "-")
+
+    def test_format_meter_bar(self) -> None:
+        self.assertEqual(format_meter_bar(None), "░░░░░")
+        self.assertEqual(format_meter_bar(0), "░░░░░")
+        self.assertEqual(format_meter_bar(100), "■■■■■")
+        self.assertEqual(format_meter_bar(80), "■■■■░")
+        self.assertEqual(format_meter_bar(20), "■░░░░")
+        self.assertEqual(format_meter_bar(-10), "░░░░░")
+        self.assertEqual(format_meter_bar(120), "■■■■■")
+        self.assertEqual(format_meter_bar(50, width=10), "■■■■■░░░░░")
+        self.assertEqual(format_meter_bar(50, width=0), "")
+
+    def test_render_meter_bar(self) -> None:
+        # Healthy (>50%)
+        t_high = render_meter_bar(80)
+        self.assertEqual(t_high.plain, "■■■■░")
+        self.assertTrue(any("#77ca9b" in str(span.style) for span in t_high.spans))
+
+        # Warning (20-50%)
+        t_mid = render_meter_bar(40)
+        self.assertEqual(t_mid.plain, "■■░░░")
+        self.assertTrue(any("#cbc06c" in str(span.style) for span in t_mid.spans))
+
+        # Critical (<=20%)
+        t_low = render_meter_bar(10)
+        self.assertEqual(t_low.plain, "■░░░░")
+        self.assertTrue(any("#dc4c4c" in str(span.style) for span in t_low.spans))
+
+        # None / unconfigured
+        t_none = render_meter_bar(None)
+        self.assertEqual(t_none.plain, "░░░░░")
+
+    def test_format_colored_model_usage(self) -> None:
+        # Normal pair
+        res = format_colored_model_usage(" 95%/80% ")
+        self.assertEqual(res.plain, " 95%/80% ")
+        self.assertTrue(any("#77ca9b" in str(span.style) for span in res.spans))
+
+        # Warning and critical pair
+        res_crit = format_colored_model_usage(" 35%/15% ")
+        self.assertEqual(res_crit.plain, " 35%/15% ")
+        self.assertTrue(any("#cbc06c" in str(span.style) for span in res_crit.spans))
+        self.assertTrue(any("#dc4c4c" in str(span.style) for span in res_crit.spans))
+
+        # Dash / unknown
+        res_dash = format_colored_model_usage("-")
+        self.assertEqual(res_dash.plain, "-")
+        self.assertEqual(format_colored_model_usage("").plain, "-")
+
+    def test_format_rich_window_summary(self) -> None:
+        now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        # None / unknown
+        meta_empty = AccountMeta()
+        self.assertEqual(format_rich_window_summary(meta_empty, "short", now).plain, "-")
+
+        # Window with value None and status error
+        meta_err = AccountMeta(usage_windows={"short": UsageWindow(status="error", value=None)})
+        self.assertEqual(format_rich_window_summary(meta_err, "short", now).plain, "error")
+
+        # Gemini fallback to usage_windows with countdown
+        meta_gemini = AccountMeta(
+            usage_windows={
+                "short": UsageWindow(
+                    status="ok",
+                    value=85.0,
+                    reset_at="2026-01-01T12:30:00+00:00",
+                )
+            }
+        )
+        t_gem = format_rich_window_summary(meta_gemini, "short", now, family="gemini")
+        self.assertIn("85%", t_gem.plain)
+        self.assertIn("in 30m", t_gem.plain)
+        self.assertEqual(t_gem.plain[:5], "■■■■░")
+
+        # Claude family from usage_families
+        meta_claude = AccountMeta(
+            usage_families={
+                "other": {
+                    "weekly": UsageWindow(
+                        status="ok",
+                        value=0.0,
+                        reset_at="2026-01-02T12:00:00+00:00",
+                    )
+                }
+            }
+        )
+        t_claude = format_rich_window_summary(meta_claude, "weekly", now, family="claude")
+        self.assertIn("0%", t_claude.plain)
+        self.assertIn("in 1d", t_claude.plain)
+        self.assertEqual(t_claude.plain[:5], "░░░░░")
 
 
 class TUIBackgroundRefreshTests(unittest.TestCase):

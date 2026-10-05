@@ -25,10 +25,10 @@ class HelpModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="help-modal-dialog"):
-            yield Static("Keyboard Shortcuts Reference", classes="modal-title")
+            yield Static("Keybindings & Glossary", classes="modal-title")
             yield Static(self._build_help_text(), id="help-content")
             with Horizontal(classes="modal-buttons"):
-                yield Button("Close (Esc)", id="btn-close", variant="primary")
+                yield Button("Close (Esc)", id="btn-close", variant="default")
 
     def _build_help_text(self) -> Text:
         t = Text()
@@ -61,7 +61,7 @@ class HelpModal(ModalScreen[None]):
             (
                 "Navigation & View",
                 [
-                    ("1-5", "Jump to tab (Accounts, Hygiene, History, Logs, Proxies)"),
+                    ("1-6", "Jump to tab (Accounts, Fleet, Logs, History, Hygiene, Proxies)"),
                     ("[ / ]", "Previous / next tab"),
                     ("s", "Cycle sort order (name, state, health, usage)"),
                     ("o", "Toggle Details overview panel"),
@@ -74,10 +74,23 @@ class HelpModal(ModalScreen[None]):
         ]
 
         for sec_title, items in sections:
-            t.append(f"\n{sec_title}\n", style="bold cyan")
+            t.append(f"\n{sec_title}\n", style="bold #58a6ff")
             for key, desc in items:
-                t.append(f"  {key:<12}", style="bold yellow")
-                t.append(f"{desc}\n", style="white")
+                t.append(f"  {key:<12}", style="bold #d29922")
+                t.append(f"{desc}\n", style="#e6edf3")
+
+        t.append("\nGlossary\n", style="bold #58a6ff")
+        glossary: list[tuple[str, str]] = [
+            ("Peak Burst", "Max concurrent active accounts burning quota simultaneously"),
+            ("Burnt %", "Total quota percentage consumed over 7 days"),
+            ("Eff %", "Quota score limited by bottleneck model"),
+            ("(S/W)", "5-hour short and 7-day weekly quota windows"),
+            ("Min Headroom %", "Lowest recorded quota percentage before reset"),
+            ("Zombie Flag", "Paid account with 0% 7-day duty cycle"),
+        ]
+        for term, explanation in glossary:
+            t.append(f"  {term:<23}", style="bold #bc8cff")
+            t.append(f"{explanation}\n", style="#e6edf3")
 
         return t
 

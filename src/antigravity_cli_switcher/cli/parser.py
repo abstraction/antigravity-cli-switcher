@@ -277,4 +277,13 @@ def build_parser() -> argparse.ArgumentParser:
     hygiene.add_argument("--fix", action="store_true", help="Sanitize synthetic test tokens from keyring and runtime")
     hygiene.add_argument("--json", action="store_true", help="Print machine-readable JSON report")
 
+    fleet = sub.add_parser("fleet", help="Show passive fleet utilization and financial rightsizing metrics")
+    fleet.add_argument("--days", type=int, default=7, help="Trailing window in days (default: 7)")
+    fleet.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
+    set_cost = sub.add_parser("set-cost", help="Set monthly subscription cost for an account")
+    set_cost.add_argument("name", help="Account name")
+    set_cost.add_argument("usd", type=float, help="Monthly cost in USD (e.g. 20.0)")
+    set_cost.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
     return parser

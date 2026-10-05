@@ -47,10 +47,10 @@ class ProxyTab(Widget):
         )
         yield table
         with Horizontal(id="proxy-actions"):
-            yield Button("Configure", id="btn-proxy-edit", variant="primary")
-            yield Button("Toggle", id="btn-proxy-toggle", variant="default")
-            yield Button("Clear", id="btn-proxy-clear", variant="error")
-            yield Button("Test", id="btn-proxy-test", variant="default")
+            yield Button(r"[bold #58a6ff]\[p][/] Configure", id="btn-proxy-edit", variant="default")
+            yield Button(r"[bold #58a6ff]\[e][/] Toggle", id="btn-proxy-toggle", variant="default")
+            yield Button(r"[bold #f85149]\[c][/] Clear", id="btn-proxy-clear", variant="default")
+            yield Button(r"[bold #58a6ff]\[t][/] Test", id="btn-proxy-test", variant="default")
 
     def on_mount(self) -> None:
         table = self.query_one("#proxy-table", DataTable)
@@ -134,11 +134,11 @@ class ProxyTab(Widget):
 
         summary_text = Text()
         summary_text.append("Proxies: ", style="bold")
-        summary_text.append(f"{enabled_count} active", style="bold green")
-        summary_text.append(" │ ", style="dim")
-        summary_text.append(f"{saved_count} saved", style="yellow")
-        summary_text.append(" │ Active proxy: ", style="dim")
-        summary_text.append(active_proxy_str, style="bold cyan")
+        summary_text.append(f"{enabled_count} active", style="bold #77ca9b")
+        summary_text.append(" ╎ ", style="dim")
+        summary_text.append(f"{saved_count} saved", style="bold #cbc06c")
+        summary_text.append(" ╎ Active proxy: ", style="dim")
+        summary_text.append(active_proxy_str, style="bold #4897d4")
         summary.update(summary_text)
 
         cols = ("sel", "account", "state", "proxy_status", "label", "url", "latency")

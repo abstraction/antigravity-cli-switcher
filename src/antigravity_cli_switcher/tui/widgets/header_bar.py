@@ -55,50 +55,52 @@ class HeaderBar(Widget):
             return
 
         text = Text()
-        text.append(" ACS ", style="bold black on green")
+        text.append(" ACS ", style="bold #ffffff on #1c2128")
 
         active_label = self.active_account or "none"
-        active_style = "bold green" if self.active_account else "bold red"
-        mode_style = "bold magenta" if self.switch_mode == "auto" else "yellow"
+        active_dot = "● " if self.active_account else "○ "
+        active_style = "bold #77ca9b" if self.active_account else "bold #dc4c4c"
+        mode_style = "bold #9b82d4" if self.switch_mode == "auto" else "#cbc06c"
+        backend_style = "bold #4897d4" if self.quota_backend == "http" else "bold #cbc06c"
+        sep_style = "#444444"
+        lbl_style = "#777777"
+        val_style = "#cccccc"
         width = self.size.width
 
-        backend_style = "bold cyan" if self.quota_backend == "http" else "bold yellow"
+        # Always include active account token
+        text.append(" ")
+        text.append(f"{active_dot}{active_label}", style=active_style)
 
-        if 0 < width < 55:
-            # Ultra-compact mode for very narrow mobile screens
-            text.append(f" {active_label} ", style=active_style)
-            text.append("│ ", style="dim")
-            text.append(f"{self.quota_backend} ", style=backend_style)
-            text.append("│ ", style="dim")
-            text.append(self.switch_mode, style=mode_style)
-        elif 55 <= width < 90:
-            # Compact mode for 80-column terminals
-            text.append(f" {active_label} ", style=active_style)
-            text.append("│ ", style="dim")
-            text.append(f"{self.switch_mode} ", style=mode_style)
-            text.append("│ ", style="dim")
-            text.append(f"{self.quota_backend} ", style=backend_style)
-            text.append("│ ", style="dim")
-            text.append(f"{self.candidate_strategy} ", style="bold blue")
-            text.append("│ ", style="dim")
-            text.append(f"{self.refresh_interval}s ", style="cyan")
-            text.append("│ ", style="dim")
-            text.append(self.sort_mode, style="blue")
+        # Build candidate tokens in priority order
+        candidates: list[tuple[str, str]] = []
+        if width >= 105:
+            candidates.append((f"Accounts: {self.account_count}", val_style))
+            candidates.append((f"Mode: {self.switch_mode}", mode_style))
+            candidates.append((f"Quota: {self.quota_backend}", backend_style))
+            candidates.append((f"Strategy: {self.candidate_strategy}", val_style))
+            candidates.append((f"Interval: {self.refresh_interval}s", val_style))
+            candidates.append((f"Sort: {self.sort_mode}", lbl_style))
+        elif width >= 70:
+            candidates.append((f"{self.account_count} accs", val_style))
+            candidates.append((self.switch_mode, mode_style))
+            candidates.append((self.quota_backend, backend_style))
+            candidates.append((self.candidate_strategy, val_style))
+            candidates.append((f"{self.refresh_interval}s", val_style))
+            candidates.append((self.sort_mode, lbl_style))
         else:
-            # Full verbose format
-            text.append(" Active: ", style="bold")
-            text.append(f"{active_label} ", style=active_style)
-            text.append("│ Accounts: ", style="dim")
-            text.append(f"{self.account_count} ", style="bold cyan")
-            text.append("│ Mode: ", style="dim")
-            text.append(f"{self.switch_mode} ", style=mode_style)
-            text.append("│ Quota: ", style="dim")
-            text.append(f"{self.quota_backend} ", style=backend_style)
-            text.append("│ Strategy: ", style="dim")
-            text.append(f"{self.candidate_strategy} ", style="bold blue")
-            text.append("│ Interval: ", style="dim")
-            text.append(f"{self.refresh_interval}s ", style="cyan")
-            text.append("│ Sort: ", style="dim")
-            text.append(self.sort_mode, style="blue")
+            candidates.append((self.quota_backend, backend_style))
+            candidates.append((self.switch_mode, mode_style))
+
+        # Dynamically append tokens that fit comfortably within width
+        current_len = text.cell_len
+        target_max = max(width - 2, 20) if width > 0 else 120
+
+        for tok_str, tok_style in candidates:
+            needed = 3 + len(tok_str)  # " ╎ " + string
+            if width > 0 and (current_len + needed) > target_max:
+                break
+            text.append(" ╎ ", style=sep_style)
+            text.append(tok_str, style=tok_style)
+            current_len += needed
 
         content_static.update(text)

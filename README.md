@@ -8,7 +8,7 @@
   </p>
   <p>Active-standby account manager and quota failover switcher for Antigravity CLI on Linux</p>
   <p>
-    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-227%20passed-2ea043" alt="Tests"></a>
+    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-265%20passed-2ea043" alt="Tests"></a>
     <a href="https://github.com/abstraction/antigravity-cli-switcher"><img src="https://img.shields.io/badge/python-3.10+-3776ab" alt="Python"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   </p>
@@ -37,7 +37,7 @@ On Linux, `agy` stores OAuth credentials directly in the global FreeDesktop Secr
 * **OS keyring isolation.** Protects the active session credential while background processes check quotas or probe standby profiles.
 * **Independent quota windows.** Evaluates `gemini-5h`, `gemini-weekly`, `other-5h`, and `other-weekly` quotas separately.
 * **Configurable candidate ranking.** Selects standby accounts using `squeeze`, `highest-short`, or `round-robin` strategies.
-* **Interactive Textual TUI.** Five operational tabs (Accounts, Hygiene, History, Logs, Proxies) with keyboard navigation and modal dialogs.
+* **Interactive Textual TUI.** Six operational tabs (Accounts, Fleet, Logs, History, Hygiene, Proxies) with keyboard navigation and modal dialogs.
 * **Per-account proxy routing.** Assigns independent HTTP, HTTPS, or SOCKS5 proxies to individual accounts.
 * **Credential hygiene engine.** Audits stored profiles, detects expired tokens, and flags file corruptions with automated repair commands.
 * **Multi-backend quota polling.** Direct CloudCode HTTP engine (default, ~0.4s) avoids machine telemetry and keyring flapping. Native CLI wrapper executes inside isolated keyring buffers.
@@ -119,17 +119,18 @@ The dashboard provides a full-screen Textual interface for monitoring quotas, ma
 
 ### Tabs
 
-1. **Accounts (`1`).** Table displaying account name, active indicator, health badges (`OK`, `COOL`, `FAIL`, `INELIG`, `MISMAT`), Gemini and Claude five-hour and weekly usage percentages, reset timers, and failure counts. The detail panel shows account metadata, proxy settings, and cooldown status.
-2. **Hygiene (`2`).** System audit view checking token expiration, profile files, keyring synchronization, and synthetic test tokens.
-3. **History (`3`).** Audit log of switch events with timestamps, triggers (`manual`, `quota`, `log-watch`), and reasons.
-4. **Logs (`4`).** Live tail of `manager.log` within the terminal.
-5. **Proxies (`5`).** Table of configured HTTP and SOCKS5 proxies per account.
+1. **Accounts (`1`).** Table displaying account name, active indicator, health badges (`OK`, `COOL`, `FAIL`, `INELIG`, `MISMAT`), Gemini and Claude usage percentages, reset timers, and failure counts. The detail panel shows account metadata, meter bars, proxy settings, and cooldown status.
+2. **Fleet (`2`).** Fleet utilization view showing active duty cycles, burnt quota, minimum headroom, monthly subscription costs, and zombie account flags.
+3. **Logs (`3`).** Live tail of `manager.log` within the terminal.
+4. **History (`4`).** Audit log of switch events with timestamps, triggers (`manual`, `quota`, `log-watch`), and reasons.
+5. **Hygiene (`5`).** System audit view checking token expiration, profile files, keyring synchronization, and synthetic test tokens.
+6. **Proxies (`6`).** Table of configured HTTP and SOCKS5 proxies per account.
 
 ### Keybindings
 
 | Key | Action |
 |---|---|
-| `1` - `5` | Switch to tab by index (Accounts, Hygiene, History, Logs, Proxies) |
+| `1` - `6` | Switch to tab by index (Accounts, Fleet, Logs, History, Hygiene, Proxies) |
 | `Left` / `Right` or `[` / `]` | Navigate to previous or next tab |
 | `Up` / `Down` or `j` / `k` | Navigate account rows |
 | `Enter` or `a` | Activate the selected account |
@@ -354,6 +355,32 @@ acs hygiene --fix
 acs verify-accounts
 ```
 
+## Fleet utilization and rightsizing
+
+The fleet engine passively monitors account usage without making extra API calls. It computes rolling duty cycles, quota consumption, and financial waste across your accounts.
+
+```bash
+# View fleet metrics and rightsizing recommendations over the trailing 7 days
+acs fleet
+
+# Specify a custom trailing window in days
+acs fleet --days 14
+
+# Output machine-readable JSON
+acs fleet --json
+
+# Set monthly subscription cost for an account (defaults to $20/month)
+acs set-cost work 20.0
+```
+
+### Metrics tracked
+
+* **Duty cycle (`7D DUTY`).** Percentage of time the account served as the active profile during the window.
+* **Burnt quota (`BURNT (G/O)`).** Sum of quota percentage consumed across Gemini and Claude model families.
+* **Minimum headroom (`MIN HEAD`).** Lowest remaining quota percentage recorded before reset windows cleared.
+* **Zombie detection (`ZOMBIE`).** Flags enabled accounts with paid monthly subscriptions that have 0% duty cycle and 0% quota consumed.
+* **Fleet rightsizing.** Evaluates peak concurrent burst depth, binding model constraints, estimated monthly waste, and recommended fleet size.
+
 ## Migration from legacy directory
 
 If migrating from an earlier setup using `~/.agy-cli-manager`:
@@ -406,6 +433,8 @@ The migration utility creates a timestamped backup archive of the legacy directo
 | `acs proxy-list` | List all account proxy assignments |
 | `acs proxy-show [name]` | Display proxy settings for an account |
 | `acs proxy-clear <name>` | Remove proxy assignment from an account |
+| `acs fleet` | Display passive fleet utilization and financial rightsizing metrics |
+| `acs set-cost <name> <usd>` | Set monthly subscription cost for an account |
 | `acs hygiene` | Audit account storage, token validity, and keyring health |
 | `acs verify-accounts` | Test authentication and runtime usability |
 | `acs switch-history` | View recent account switch events and audit trail |

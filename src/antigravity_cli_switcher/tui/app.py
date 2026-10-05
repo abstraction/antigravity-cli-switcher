@@ -27,6 +27,7 @@ from antigravity_cli_switcher.tui.workers import (
 class ACSApp(App[int]):
     """Antigravity CLI Switcher Textual Dashboard."""
 
+    ENABLE_COMMAND_PALETTE = False
     CSS_PATH = Path(__file__).parent / "theme.tcss"
 
     def __init__(

@@ -219,6 +219,7 @@ def get_status_snapshot(paths: ManagerPaths) -> dict:
         "switch_history": _normalize_switch_history(state.get("switch_history")),
         "log_watch": get_log_watch_snapshot(paths),
         "accounts": snapshot_accounts,
+        "fleet_utilization": state.get("fleet_utilization", {}),
     }
 
 

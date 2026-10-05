@@ -446,5 +446,13 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
         return cmd_migrate(args)
     if cmd == "hygiene":
         return cmd_hygiene(paths, args)
+    if cmd == "fleet":
+        from antigravity_cli_switcher.cli.fleet import cmd_fleet
+
+        return cmd_fleet(paths, args)
+    if cmd == "set-cost":
+        from antigravity_cli_switcher.cli.fleet import cmd_set_cost
+
+        return cmd_set_cost(paths, args)
 
     parser.exit(2, "error: unknown command\n")

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
 
 from antigravity_cli_switcher.manager import ManagerPaths
 from antigravity_cli_switcher.models import (
@@ -26,6 +26,7 @@ from antigravity_cli_switcher.tui.widgets.account_table import (
     AccountTable,
 )
 from antigravity_cli_switcher.tui.widgets.detail_panel import DetailPanel
+from antigravity_cli_switcher.tui.widgets.fleet_tab import FleetTab
 from antigravity_cli_switcher.tui.widgets.header_bar import HeaderBar
 
 
@@ -83,21 +84,14 @@ def temp_paths(tmp_path: Path) -> ManagerPaths:
 
 
 @pytest.mark.asyncio
-async def test_help_modal_display_and_dismiss() -> None:
+async def test_help_modal_display_and_dismiss(temp_paths: ManagerPaths) -> None:
     modal = HelpModal()
 
     class HelpApp(ACSApp):
         def compose(self):
             yield Static("background")
 
-    paths = ManagerPaths(
-        root=Path("/tmp"),
-        accounts_dir=Path("/tmp/acc"),
-        state_file=Path("/tmp/state.json"),
-        runtime_dir=Path("/tmp/run"),
-        lock_file=Path("/tmp/lock"),
-    )
-    app = HelpApp(paths=paths)
+    app = HelpApp(paths=temp_paths)
     async with app.run_test() as pilot:
         app.push_screen(modal)
         await pilot.pause()
@@ -111,6 +105,9 @@ async def test_help_modal_display_and_dismiss() -> None:
         assert "Navigation & View" in text_str
         assert "Enter" in text_str
         assert "Toggle Details" in text_str
+        assert "Glossary" in text_str
+        assert "Peak Burst" in text_str
+        assert "Zombie Flag" in text_str
 
         # Dismiss via escape
         await pilot.press("escape")
@@ -176,11 +173,12 @@ def test_account_table_column_keys_for_widths() -> None:
     assert table._get_column_keys_for_width(60) == MOBILE_COL_KEYS
     assert len(MOBILE_COL_KEYS) == 7
 
-    # Compact width (75 - 104)
+    # Compact width (75 - 117)
     assert table._get_column_keys_for_width(80) == COMPACT_COL_KEYS
+    assert table._get_column_keys_for_width(110) == COMPACT_COL_KEYS
     assert len(COMPACT_COL_KEYS) == 9
 
-    # Full width (>= 105)
+    # Full width (>= 118)
     assert table._get_column_keys_for_width(120) == ALL_COL_KEYS
     assert len(ALL_COL_KEYS) == 11
 
@@ -204,7 +202,7 @@ def test_header_bar_responsive_content() -> None:
 
 
 @pytest.mark.asyncio
-async def test_detail_panel_compact_presentation() -> None:
+async def test_detail_panel_compact_presentation(temp_paths: ManagerPaths) -> None:
     panel = DetailPanel()
     snapshot, verification = create_sample_snapshot()
 
@@ -212,14 +210,7 @@ async def test_detail_panel_compact_presentation() -> None:
         def compose(self):
             yield panel
 
-    paths = ManagerPaths(
-        root=Path("/tmp"),
-        accounts_dir=Path("/tmp/acc"),
-        state_file=Path("/tmp/state.json"),
-        runtime_dir=Path("/tmp/run"),
-        lock_file=Path("/tmp/lock"),
-    )
-    app = DetailApp(paths=paths)
+    app = DetailApp(paths=temp_paths)
     async with app.run_test(size=(60, 24)):
         meta = snapshot.accounts["alpha"]
         ver = verification.accounts["alpha"]
@@ -231,3 +222,54 @@ async def test_detail_panel_compact_presentation() -> None:
         assert "Backend" in rendered
         assert "Status" in rendered
         assert "Problem" in rendered
+
+
+@pytest.mark.asyncio
+async def test_detail_panel_email_clamping(temp_paths: ManagerPaths) -> None:
+    panel = DetailPanel()
+    snapshot, _ = create_sample_snapshot()
+
+    class DetailApp(ACSApp):
+        def compose(self):
+            yield panel
+
+    app = DetailApp(paths=temp_paths)
+    async with app.run_test(size=(100, 24)):
+        meta = snapshot.accounts["alpha"]
+        ver = AccountVerification(
+            problem_status=ProblemStatus.OK,
+            summary="Ready",
+            token_email="user_with_very_long_email_name@example.com",
+            expected_email="user_with_very_long_email_name@example.com",
+        )
+        panel.update_detail("alpha", meta, ver)
+        content_static = panel.query_one("#detail-content", Static)
+        assert content_static.content is not None
+        rendered = str(content_static.content)
+        # Clamped to 20 chars max (19 chars + ellipsis)
+        assert "user_with_very_long…" in rendered
+
+
+@pytest.mark.asyncio
+async def test_fleet_tab_responsive_column_adjustment(temp_paths: ManagerPaths) -> None:
+    tab = FleetTab()
+
+    class FleetApp(ACSApp):
+        def compose(self):
+            yield tab
+
+    app = FleetApp(paths=temp_paths)
+    async with app.run_test(size=(100, 24)) as pilot:
+        await pilot.pause()
+        table = tab.query_one("#fleet-table", DataTable)
+        col_gemini = next(col for k, col in table.columns.items() if k and str(k.value) == "gemini_burnt")
+        # At width 100 (< 112), gemini_burnt is compacted to 12
+        assert col_gemini.width == 12
+
+        # Adjust for 120 width
+        tab._adjust_column_widths(120)
+        assert col_gemini.width == 14
+
+        # Adjust for 90 width (< 98)
+        tab._adjust_column_widths(90)
+        assert col_gemini.width == 10

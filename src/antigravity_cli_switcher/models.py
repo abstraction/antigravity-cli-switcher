@@ -232,6 +232,7 @@ class StatusSnapshot(BaseModel):
     log_watch: LogWatchState = Field(default_factory=LogWatchState)
     last_background_refresh_at: str | None = None
     accounts: dict[str, AccountMeta] = Field(default_factory=dict)
+    fleet_utilization: FleetUtilizationState = Field(default_factory=lambda: FleetUtilizationState())
 
 
 class SnapshotVerification(BaseModel):
@@ -242,3 +243,84 @@ class SnapshotVerification(BaseModel):
     active: str | None = None
     switch_mode: str = "manual"
     accounts: dict[str, AccountVerification] = Field(default_factory=dict)
+
+
+class DailyUsageBucket(BaseModel):
+    """Daily utilization metrics for a single account over one UTC calendar day."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    date: str  # Format: "YYYY-MM-DD"
+    active_seconds: int = 0
+    exhaustion_count: int = 0
+    gemini_short_consumed: float = 0.0
+    gemini_weekly_consumed: float = 0.0
+    other_short_consumed: float = 0.0
+    other_weekly_consumed: float = 0.0
+    min_gemini_headroom: float = 100.0
+    min_other_headroom: float = 100.0
+    last_observed_at: str = ""
+
+
+class AccountUtilizationRecord(BaseModel):
+    """Rolling 7-day utilization history and derived health for a single account."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    daily_buckets: list[DailyUsageBucket] = Field(default_factory=list)
+    rolling_7d_active_seconds: int = 0
+    rolling_7d_exhaustions: int = 0
+    rolling_7d_gemini_consumed: float = 0.0
+    rolling_7d_other_consumed: float = 0.0
+    rolling_7d_min_gemini_headroom: float = 100.0
+    rolling_7d_min_other_headroom: float = 100.0
+    is_zombie: bool = False
+    monthly_cost_usd: float = 20.0
+    last_gemini_weekly: float = -1.0
+    last_other_weekly: float = -1.0
+    last_gemini_short: float = -1.0
+    last_other_short: float = -1.0
+
+
+class FleetArchetype(str, Enum):
+    GHOST_FLEET = "ghost_fleet"
+    WEEKEND_WARRIOR = "weekend_warrior"
+    QUOTA_GRINDER = "quota_grinder"
+    BALANCED = "balanced"
+    STARVED_STANDBY = "starved_standby"
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
+class FleetInsight(BaseModel):
+    """Actionable executive summary for operator capacity and financial decisions."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    archetype: FleetArchetype = FleetArchetype.BALANCED
+    total_accounts: int = 0
+    active_accounts_7d: int = 0
+    zombie_accounts: list[str] = Field(default_factory=list)
+    peak_burst_depth: int = 0
+    recommended_fleet_size: int = 0
+    estimated_monthly_spend_usd: float = 0.0
+    estimated_monthly_waste_usd: float = 0.0
+    potential_annual_savings_usd: float = 0.0
+    recommendation_summary: str = ""
+    workload_ramp_viable: bool = False
+    bottleneck_family: str = "none"
+    binding_constraint: str = "burst"
+
+
+class FleetUtilizationState(BaseModel):
+    """Persistent fleet utilization namespace stored in state.json."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    version: int = 1
+    last_updated_at: str = ""
+    accounts: dict[str, AccountUtilizationRecord] = Field(default_factory=dict)
+    last_active_account: str = ""
+    last_active_switched_at: str = ""
+    daily_peak_burst: dict[str, int] = Field(default_factory=dict)

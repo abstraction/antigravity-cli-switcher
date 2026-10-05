@@ -70,6 +70,9 @@ class DashboardActionsScreenBase(Screen[None]):
         try:
             import antigravity_cli_switcher.tui.screens.dashboard as dash_mod
 
+            if self.snapshot and name in self.snapshot.accounts and not self.snapshot.accounts[name].enabled:
+                set_enabled(self.acs_app.paths, name, True)
+
             dash_mod.switch_account(self.acs_app.paths, name)
             self.app.call_from_thread(self._set_status, f"Activated {name}.")
             self.acs_app.refresh_snapshot()

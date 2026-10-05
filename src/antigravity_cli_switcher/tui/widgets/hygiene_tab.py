@@ -43,20 +43,20 @@ class HygieneTab(Widget):
         )
         yield table
         with Horizontal(id="hygiene-actions"):
-            yield Button("Run Fix", id="btn-hygiene-fix", variant="error")
-            yield Button("Relogin Account", id="btn-hygiene-relogin", variant="warning")
-            yield Button("Refresh", id="btn-hygiene-refresh", variant="primary")
+            yield Button(r"[bold #58a6ff]\[f][/] Run Fix", id="btn-hygiene-fix", variant="default")
+            yield Button(r"[bold #58a6ff]\[l][/] Relogin", id="btn-hygiene-relogin", variant="default")
+            yield Button(r"[bold #58a6ff]\[t][/] Refresh", id="btn-hygiene-refresh", variant="default")
 
     def on_mount(self) -> None:
         table = self.query_one("#hygiene-table", DataTable)
-        table.add_column("Account", key="account", width=16)
-        table.add_column("Status", key="status", width=10)
-        table.add_column("Action", key="action", width=10)
-        table.add_column("Expected Email", key="expected_email", width=18)
-        table.add_column("Token Email", key="token_email", width=18)
-        table.add_column("Synthetic", key="synthetic", width=8)
-        table.add_column("Expired", key="expired", width=8)
-        table.add_column("Summary", key="summary", width=24)
+        table.add_column("Account", key="account", width=14)
+        table.add_column("Status", key="status", width=8)
+        table.add_column("Action", key="action", width=8)
+        table.add_column("Expected Email", key="expected_email", width=16)
+        table.add_column("Token Email", key="token_email", width=16)
+        table.add_column("Synthetic", key="synthetic", width=6)
+        table.add_column("Expired", key="expired", width=6)
+        table.add_column("Summary", key="summary", width=18)
 
     @property
     def acs_app(self) -> ACSApp:
@@ -141,19 +141,19 @@ class HygieneTab(Widget):
 
         summary_text = Text()
         summary_text.append("Hygiene: ", style="bold")
-        summary_text.append(f"{total} total", style="white")
-        summary_text.append(" │ ", style="dim")
-        summary_text.append(f"{clean_count} clean", style="bold green")
-        summary_text.append(" │ ", style="dim")
-        summary_text.append(f"{warn_count} warnings", style="bold yellow")
-        summary_text.append(" │ ", style="dim")
+        summary_text.append(f"{total} total", style="#cccccc")
+        summary_text.append(" ╎ ", style="dim")
+        summary_text.append(f"{clean_count} clean", style="bold #77ca9b")
+        summary_text.append(" ╎ ", style="dim")
+        summary_text.append(f"{warn_count} warnings", style="bold #cbc06c")
+        summary_text.append(" ╎ ", style="dim")
         summary_text.append(
             f"{contam_count} contaminated",
-            style="bold red" if contam_count > 0 else "dim",
+            style="bold #dc4c4c" if contam_count > 0 else "dim",
         )
 
         if contam_count > 0:
-            summary_text.append(" │ Synthetic tokens found. Run fix.", style="bold red")
+            summary_text.append(" ╎ Synthetic tokens found. Run fix.", style="bold #dc4c4c")
 
         summary.update(summary_text)
 
@@ -214,7 +214,7 @@ class HygieneTab(Widget):
         try:
             actions = fix_hygiene(self.acs_app.paths)
             if actions:
-                msg = f"Applied hygiene fix: {'; '.join(actions)}"
+                msg = f"Applied hygiene fix: {', '.join(actions)}"
             else:
                 msg = "No hygiene issues found."
             self.app.call_from_thread(self.post_message, StatusMessage(msg))
