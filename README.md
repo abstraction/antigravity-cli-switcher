@@ -252,6 +252,11 @@ Candidate selection strategies:
 * **`native`**: Executes `agy -p "/usage" --output-format json` wrapped in `_isolated_keyring_warmup`. Uses the official Go binary TLS fingerprint, but takes ~6.7s per invocation and transmits machine telemetry.
 * **`auto`**: Attempts `native` first and automatically falls back to `http` if the CLI command fails or returns zero quota buckets.
 
+> [!IMPORTANT]
+> **Anti-Abuse Precedence (`http` > `native`)**:
+> The label "native" instinctively sounds more reliable, but running `native` in multi-account environments triggers automated Google Clearcut anti-abuse bans. The official `agy` binary logs persistent machine UUIDs and DMI hardware identifiers (`/sys/class/dmi/id/product_name`) to `play.googleapis.com/log`. Polling standby accounts with `native` presents multiple user accounts authenticated from identical hardware within seconds, tripping Google Sybil / bot-farm flags.
+> The `http` backend connects cleanly to CloudCode PA endpoints, sending zero Clearcut telemetry, zero hardware identifiers, and avoiding OS keyring flapping. `http` is the intentional, verified default.
+
 ### CLI commands and backend overrides
 
 View or set the global quota backend:
