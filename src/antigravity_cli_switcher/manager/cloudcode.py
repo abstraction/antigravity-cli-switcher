@@ -29,7 +29,7 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
 def _get_dynamic_user_agent() -> str:
-    version = "1.2.16"
+    version = "1.3.3"
     try:
         binary = resolve_agy_binary(None)
         result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=1.0)
