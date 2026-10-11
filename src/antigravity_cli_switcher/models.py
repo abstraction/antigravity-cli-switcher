@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class HealthStatus(str, Enum):
@@ -64,10 +64,10 @@ class FreshToken(str):
 class AccountIdentity(BaseModel):
     """Account identity metadata extracted from JWT or user config."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     email: str | None = None
-    name: str | None = None
+    name: str | None = Field(default=None, validation_alias=AliasChoices("name", "display_name", "displayName"))
     plan: str | None = None
     project_id: str | None = None
 

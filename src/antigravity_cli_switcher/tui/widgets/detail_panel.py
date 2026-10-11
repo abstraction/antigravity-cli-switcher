@@ -120,6 +120,8 @@ class DetailPanel(Widget):
             content_static.update(Text("Select an account to view details.", style="dim italic"))
             return
 
+        from antigravity_cli_switcher.manager.cloudcode import format_plan_type_label
+
         now = datetime.now(timezone.utc)
         prob_str = format_problem_summary(
             verification.problem_status if verification else None,
@@ -221,7 +223,7 @@ class DetailPanel(Widget):
             compact_lines: list[tuple[str, str | Text]] = [
                 ("Token", tok_email),
                 ("Expected", exp_email),
-                ("Plan", meta.plan_type or "unknown"),
+                ("Plan", format_plan_type_label(meta.plan_type) if meta.plan_type else "unknown"),
                 ("Mode", mode_str),
                 ("Backend", meta.last_quota_backend or "-"),
                 ("Gemini 5h", gemini_5h),
@@ -251,7 +253,7 @@ class DetailPanel(Widget):
             lines: list[tuple[str, str | Text, str, str | Text]] = [
                 ("Token Email", tok_email, "Gemini 5h", gemini_5h),
                 ("Exp. Email", exp_email, "Gemini Wk", gemini_wk),
-                ("Plan", meta.plan_type or "unknown", "Other 5h", other_5h),
+                ("Plan", format_plan_type_label(meta.plan_type) if meta.plan_type else "unknown", "Other 5h", other_5h),
                 ("Mode", mode_str, "Other Wk", other_wk),
                 ("Next Refresh", next_ref, "Backend", meta.last_quota_backend or "-"),
                 ("Failures", str(meta.fail_count), "Problem", prob_str),

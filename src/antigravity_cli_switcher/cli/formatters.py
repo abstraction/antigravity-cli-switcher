@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
+
+from antigravity_cli_switcher.models import AccountMeta
 
 
 def _problem_badge(problem_status: str | None) -> str:
@@ -20,6 +23,7 @@ def _problem_badge(problem_status: str | None) -> str:
         "token_synthetic": "SYNTH",
         "token_refresh_required": "TKN_ST",
         "quota_check_due": "STALE",
+        "oauth_rotated": "ROTATE",
     }
     return mapping.get((problem_status or "").lower(), "?")
 
@@ -162,16 +166,38 @@ def _format_model_usage(meta: dict, model_prefix: str) -> str:
     return f"{s}/{w}"
 
 
-def _get_nearest_reset(meta: dict, now: datetime) -> str | None:
-    resets = []
-    windows = meta.get("usage_windows")
+def _get_nearest_reset(meta: Mapping[str, object] | AccountMeta, now: datetime) -> str | None:
+    if isinstance(meta, AccountMeta):
+        data: Mapping[str, object] = meta.model_dump()
+    elif isinstance(meta, Mapping):
+        data = meta
+    else:
+        return None
+
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    resets: list[datetime] = []
+    windows = data.get("usage_windows")
     if isinstance(windows, dict):
         for key in ("short", "weekly"):
             w = windows.get(key)
-            if isinstance(w, dict) and w.get("reset_at"):
-                dt = _parse_iso_timestamp(w["reset_at"])
+            reset_at = getattr(w, "reset_at", None) if not isinstance(w, dict) else w.get("reset_at")
+            if isinstance(reset_at, str) and reset_at.strip():
+                dt = _parse_iso_timestamp(reset_at)
                 if dt:
                     resets.append(dt)
+    families = data.get("usage_families")
+    if isinstance(families, dict):
+        for family in families.values():
+            if isinstance(family, dict):
+                for key in ("short", "weekly"):
+                    w = family.get(key)
+                    reset_at = getattr(w, "reset_at", None) if not isinstance(w, dict) else w.get("reset_at")
+                    if isinstance(reset_at, str) and reset_at.strip():
+                        dt = _parse_iso_timestamp(reset_at)
+                        if dt:
+                            resets.append(dt)
     if not resets:
         return None
     future = [dt for dt in resets if dt > now]

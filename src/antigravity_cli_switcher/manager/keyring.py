@@ -54,22 +54,40 @@ def is_synthetic_or_test_token(token_data: dict | str | None) -> bool:
     if not isinstance(token_data, dict):
         return False
     tok = token_data.get("token")
+    dicts_to_check: list[dict] = []
     if isinstance(tok, dict):
-        access = str(tok.get("access_token", ""))
-        refresh = str(tok.get("refresh_token", ""))
+        dicts_to_check.append(tok)
+    dicts_to_check.append(token_data)
+
+    for d in dicts_to_check:
+        access = str(d.get("access_token", ""))
+        refresh = str(d.get("refresh_token", ""))
         if access.startswith(("ya29.fake", "fake", "ya29.test")) or "fake" in access.lower():
             return True
         if refresh in {"1//fake", "fake"}:
             return True
+
+    id_tokens: list[str] = []
     id_tok = token_data.get("id_token")
-    if isinstance(id_tok, str):
-        payload = _decode_jwt_payload(id_tok)
+    if isinstance(id_tok, str) and id_tok.strip():
+        id_tokens.append(id_tok)
+    if isinstance(tok, dict):
+        nested_id_tok = tok.get("id_token")
+        if isinstance(nested_id_tok, str) and nested_id_tok.strip():
+            id_tokens.append(nested_id_tok)
+
+    for cand_id_tok in id_tokens:
+        payload = _decode_jwt_payload(cand_id_tok)
         if payload and isinstance(payload, dict):
             email = str(payload.get("email", "")).lower()
             if email in {"wrong@gmail.com", "test@gmail.com", "fake@gmail.com"} or email.endswith(
                 ("@example.com", "@fake.com")
             ):
                 return True
+        elif any(
+            sig in cand_id_tok.lower() for sig in ("ya29.fake", "wrong@gmail.com", "1//fake", "fake", "ya29.test")
+        ):
+            return True
     return False
 
 

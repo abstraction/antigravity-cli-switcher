@@ -224,6 +224,7 @@ def format_problem_summary(
         "token_mismatch": "Token email mismatch",
         "token_duplicate": "Duplicate token",
         "synthetic_token": "Synthetic token",
+        "oauth_rotated": "OAuth credentials rotated (relogin required)",
     }
     desc = status_map.get(raw_status.lower(), raw_status.replace("_", " ").title())
 

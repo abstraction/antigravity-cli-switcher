@@ -145,7 +145,7 @@ class TestOAuthRotatedStatus(unittest.TestCase):
 
     def test_format_health_badge_oauth_rotated(self) -> None:
         badge = format_health_badge("oauth_rotated")
-        self.assertEqual(badge.plain, "OAUTH_ROTATED")
+        self.assertEqual(badge.plain, "ROTATE")
         self.assertEqual(badge.style, "bold red reverse")
 
     def test_candidate_health_priority_oauth_rotated(self) -> None:

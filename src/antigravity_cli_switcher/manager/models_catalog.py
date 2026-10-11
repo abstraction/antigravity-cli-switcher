@@ -5,8 +5,9 @@ import subprocess
 from pathlib import Path
 
 from antigravity_cli_switcher.manager.cloudcode import (
-    CODE_ASSIST_LOAD_PATH,
+    CODE_ASSIST_MODELS_PATH,
     _cloudcode_request,
+    _extract_project_id,
     _parse_model_label,
 )
 from antigravity_cli_switcher.manager.identity import check_token_account_match
@@ -14,6 +15,54 @@ from antigravity_cli_switcher.manager.keyring import _isolated_keyring_warmup
 from antigravity_cli_switcher.manager.locking import manager_lock
 from antigravity_cli_switcher.manager.paths import ManagerPaths, resolve_agy_binary
 from antigravity_cli_switcher.manager.state import load_state, sync_state_from_disk
+
+
+def _parse_raw_models(raw_models: object) -> list[dict[str, object]]:
+    parsed_models: list[dict[str, object]] = []
+    if isinstance(raw_models, dict):
+        for model_id, model_info in raw_models.items():
+            label = ""
+            if isinstance(model_info, dict):
+                disp = (
+                    model_info.get("displayName")
+                    or model_info.get("display_name")
+                    or model_info.get("name")
+                    or model_info.get("modelId")
+                    or model_info.get("id")
+                )
+                if isinstance(disp, str) and disp.strip():
+                    label = disp.strip()
+            elif isinstance(model_info, str) and model_info.strip():
+                label = model_info.strip()
+            if not label and isinstance(model_id, str):
+                label = model_id.strip()
+            if label:
+                parsed = _parse_model_label(label)
+                if parsed:
+                    parsed_models.append(parsed)
+                else:
+                    parsed_models.append({"name": label, "provider": None, "family": None, "variant": None})
+    elif isinstance(raw_models, list):
+        for item in raw_models:
+            if isinstance(item, str) and item.strip():
+                parsed = _parse_model_label(item)
+                if parsed:
+                    parsed_models.append(parsed)
+            elif isinstance(item, dict):
+                disp = (
+                    item.get("displayName")
+                    or item.get("display_name")
+                    or item.get("name")
+                    or item.get("modelId")
+                    or item.get("id")
+                )
+                if isinstance(disp, str) and disp.strip():
+                    parsed = _parse_model_label(disp)
+                    if parsed:
+                        parsed_models.append(parsed)
+                    else:
+                        parsed_models.append({"name": disp.strip(), "provider": None, "family": None, "variant": None})
+    return parsed_models
 
 
 def _run_agy_models_command(
@@ -73,17 +122,27 @@ def list_models(
     models: list[dict[str, object]] = []
     try:
         access_token = _ensure_fresh_access_token(source_home, agy_binary=agy_binary, timeout_seconds=timeout_seconds)
-        load_response = _cloudcode_request(access_token, CODE_ASSIST_LOAD_PATH, {})
+        project_id = _extract_project_id({}, source_home)
+        if not project_id and isinstance(state.get("accounts"), dict):
+            account_data = state["accounts"].get(account_name)
+            if isinstance(account_data, dict):
+                cand = account_data.get("project_id")
+                if isinstance(cand, str) and cand.strip():
+                    project_id = cand.strip()
+        payload: dict[str, object] = {"project": project_id} if project_id else {}
+        load_response = _cloudcode_request(access_token, CODE_ASSIST_MODELS_PATH, payload)
         raw_models = load_response.get("models")
-        if isinstance(raw_models, list):
-            parsed_models: list[dict[str, object]] = []
-            for item in raw_models:
-                if isinstance(item, str):
-                    parsed = _parse_model_label(item)
-                    if parsed:
-                        parsed_models.append(parsed)
-            if parsed_models:
-                models = parsed_models
+        if raw_models is None and isinstance(load_response.get("response"), dict):
+            raw_models = load_response["response"].get("models")
+        if raw_models is None and isinstance(load_response.get("data"), dict):
+            raw_models = load_response["data"].get("models")
+        if raw_models is None and isinstance(load_response.get("command"), dict):
+            cmd_data = load_response["command"].get("data")
+            if isinstance(cmd_data, dict):
+                raw_models = cmd_data.get("models")
+        parsed_models = _parse_raw_models(raw_models)
+        if parsed_models:
+            models = parsed_models
     except Exception:
         pass
 

@@ -13,7 +13,9 @@ from antigravity_cli_switcher.manager.cloudcode import (
     CODE_ASSIST_QUOTA_SUMMARY_PATH,
     CODE_ASSIST_USER_AGENT,
     _cloudcode_request,
+    _extract_plan_tier,
     _extract_project_id,
+    _extract_single_bucket_quota,
     _google_userinfo_request,
     _parse_quota_families_from_summary,
     format_plan_type_compact,
@@ -42,7 +44,6 @@ from antigravity_cli_switcher.manager.policy import (
 )
 from antigravity_cli_switcher.manager.state import (
     _default_usage_families,
-    _normalize_timestamp,
     _sync_legacy_usage_fields,
     get_live_dir,
     load_state,
@@ -376,10 +377,14 @@ def _refresh_http_quota(
     fallback_used = bool(getattr(access_token, "fallback_used", False))
 
     load_response = _cloudcode_request(access_token, CODE_ASSIST_LOAD_PATH, {})
-    ineligible_tiers = load_response.get("ineligibleTiers")
+    ineligible_tiers = load_response.get("ineligibleTiers") or load_response.get("ineligible_tiers")
     if isinstance(ineligible_tiers, list) and ineligible_tiers:
         first_tier = ineligible_tiers[0] if isinstance(ineligible_tiers[0], dict) else {}
-        reason = str(first_tier.get("reasonMessage") or "Your current account is not eligible for Antigravity.")
+        reason = str(
+            first_tier.get("reasonMessage")
+            or first_tier.get("reason_message")
+            or "Your current account is not eligible for Antigravity."
+        )
         raise ValueError(f"Eligibility check failed: {reason}")
 
     project_id = _extract_project_id(load_response, source_home)
@@ -397,15 +402,10 @@ def _refresh_http_quota(
 
     if bucket_count == 0:
         quota_response = _cloudcode_request(access_token, CODE_ASSIST_QUOTA_PATH, quota_request)
-        remaining_raw = quota_response.get("remainingFraction")
-        short_window: dict[str, object] = {
-            "status": "known" if isinstance(remaining_raw, (int, float)) else "unknown",
-            "value": round(float(remaining_raw) * 100, 2) if isinstance(remaining_raw, (int, float)) else None,
-            "reset_at": _normalize_timestamp(quota_response.get("resetTime")),
-        }
+        short_window, _weekly = _extract_single_bucket_quota(quota_response)
         usage_families["gemini"]["short"] = short_window
 
-    plan_type = load_response.get("planType")
+    plan_type = _extract_plan_tier(load_response)
 
     userinfo = None
     try:

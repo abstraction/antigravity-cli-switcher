@@ -22,6 +22,7 @@ from antigravity_cli_switcher.manager.state import (
 
 CODE_ASSIST_BASE_URL = "https://daily-cloudcode-pa.googleapis.com"
 CODE_ASSIST_LOAD_PATH = "/v1internal:loadCodeAssist"
+CODE_ASSIST_MODELS_PATH = "/v1internal:fetchAvailableModels"
 CODE_ASSIST_QUOTA_PATH = "/v1internal:retrieveUserQuota"
 CODE_ASSIST_QUOTA_SUMMARY_PATH = "/v1internal:retrieveUserQuotaSummary"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
@@ -46,6 +47,7 @@ def _get_dynamic_user_agent() -> str:
 CODE_ASSIST_USER_AGENT = _get_dynamic_user_agent()
 
 _PLAN_TYPE_LABELS: dict[str, tuple[str, str]] = {
+    # Legacy planType enum values (may appear in old API responses)
     "GEMINI_CODE_ASSIST_STARTER": ("Google AI Free", "Free"),
     "GEMINI_CODE_ASSIST": ("Google AI Pro", "Pro"),
     "CLOUD_AI_COMPANION": ("Google AI Pro", "Pro"),
@@ -55,6 +57,12 @@ _PLAN_TYPE_LABELS: dict[str, tuple[str, str]] = {
     "GOOGLE_AI_ULTRA_MAX": ("Ultra Max", "UltMax"),
     "GEMINI_CODE_ASSIST_ENTERPRISE": ("Enterprise", "Ent"),
     "CLOUD_AI_COMPANION_ENTERPRISE": ("Enterprise", "Ent"),
+    # Live currentTier.id / paidTier.id values returned by the API
+    "free-tier": ("Antigravity Free", "Free"),
+    "standard-tier": ("Google AI Plus", "Plus"),
+    "g1-pro-tier": ("Google AI Pro", "Pro"),
+    "g1-ultra-tier": ("Google AI Ultra", "Ultra"),
+    "agy-business-paygo-tier": ("Business Pay-go", "Biz"),
 }
 
 
@@ -68,6 +76,55 @@ def format_plan_type_compact(plan_type: str | None) -> str:
     if not plan_type:
         return "?"
     return _PLAN_TYPE_LABELS.get(plan_type, (plan_type, plan_type[:6]))[1]
+
+
+def _extract_plan_tier(load_response: Mapping[str, object]) -> str | None:
+    """Extract plan tier ID from a loadCodeAssist response.
+
+    The live API returns ``currentTier.id`` / ``paidTier.id`` instead of
+    the legacy root ``planType`` key. When both are present, a non-free
+    ``paidTier`` takes precedence over a baseline ``free-tier`` current tier,
+    reflecting the user's active paid subscription (e.g. Google AI Pro).
+    """
+    # 1. Paid tier takes precedence if it indicates an active paid subscription
+    for paid_key in ("paidTier", "paid_tier", "g1Tier", "g1_tier"):
+        paid_tier = load_response.get(paid_key)
+        if isinstance(paid_tier, dict):
+            tier_id = paid_tier.get("id")
+            if isinstance(tier_id, str) and tier_id.strip() and tier_id.strip() != "free-tier":
+                return tier_id.strip()
+
+    # 2. Current tier if non-free
+    for curr_key in ("currentTier", "current_tier"):
+        current_tier = load_response.get(curr_key)
+        if isinstance(current_tier, dict):
+            tier_id = current_tier.get("id")
+            if isinstance(tier_id, str) and tier_id.strip() and tier_id.strip() != "free-tier":
+                return tier_id.strip()
+
+    # 3. Current tier fallback even if free-tier
+    for curr_key in ("currentTier", "current_tier"):
+        current_tier = load_response.get(curr_key)
+        if isinstance(current_tier, dict):
+            tier_id = current_tier.get("id")
+            if isinstance(tier_id, str) and tier_id.strip():
+                return tier_id.strip()
+
+    # 4. Paid tier fallback even if free-tier
+    for paid_key in ("paidTier", "paid_tier", "g1Tier", "g1_tier"):
+        paid_tier = load_response.get(paid_key)
+        if isinstance(paid_tier, dict):
+            tier_id = paid_tier.get("id")
+            if isinstance(tier_id, str) and tier_id.strip():
+                return tier_id.strip()
+
+    # 5. Legacy / mock fallback
+    for key in ("planType", "plan_type"):
+        raw = load_response.get(key)
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+
+    return None
 
 
 def _cloudcode_request(access_token: str, path: str, payload: dict) -> dict:
@@ -170,6 +227,12 @@ def _extract_groups_from_summary(summary_response: Mapping[str, object]) -> list
     groups = summary_response.get("groups")
     if isinstance(groups, list):
         return [g for g in groups if isinstance(g, dict)]
+    # ConnectRPC wraps the actual payload under a "response" key
+    response_field = summary_response.get("response")
+    if isinstance(response_field, dict):
+        resp_groups = response_field.get("groups")
+        if isinstance(resp_groups, list):
+            return [g for g in resp_groups if isinstance(g, dict)]
     cmd = summary_response.get("command")
     if isinstance(cmd, dict):
         cmd_data = cmd.get("data")
@@ -182,6 +245,10 @@ def _extract_groups_from_summary(summary_response: Mapping[str, object]) -> list
         data_groups = data_field.get("groups")
         if isinstance(data_groups, list):
             return [g for g in data_groups if isinstance(g, dict)]
+    # Flat buckets fallback — wrap them in a synthetic group so callers see a non-empty list
+    flat_buckets = summary_response.get("buckets")
+    if isinstance(flat_buckets, list) and flat_buckets:
+        return [{"buckets": flat_buckets}]
     return []
 
 
@@ -190,7 +257,7 @@ def _select_quota_summary_group(summary_response: Mapping[str, object]) -> dict[
     if not groups:
         return None
     for group in groups:
-        display_name = group.get("displayName") or group.get("name")
+        display_name = group.get("displayName") or group.get("display_name") or group.get("name")
         if isinstance(display_name, str) and "gemini" in display_name.lower():
             return group
     return groups[0]
@@ -202,7 +269,7 @@ def _quota_group_family(group: Mapping[str, object]) -> str | None:
         for bucket in buckets:
             if not isinstance(bucket, dict):
                 continue
-            bucket_id = str(bucket.get("bucketId") or bucket.get("id") or "").lower()
+            bucket_id = str(bucket.get("bucketId") or bucket.get("bucket_id") or bucket.get("id") or "").lower()
             if bucket_id.startswith("gemini-"):
                 return "gemini"
             if bucket_id.startswith("3p-"):
@@ -233,7 +300,7 @@ def _parse_quota_families_from_summary(
                 continue
             bucket_count += 1
             window_name = bucket.get("window")
-            bucket_id = str(bucket.get("bucketId") or bucket.get("id") or "").lower()
+            bucket_id = str(bucket.get("bucketId") or bucket.get("bucket_id") or bucket.get("id") or "").lower()
             if window_name == "5h" or (not window_name and "-5h" in bucket_id):
                 families[family]["short"] = _parse_summary_bucket(bucket)
             elif window_name == "weekly" or (not window_name and "-weekly" in bucket_id):
@@ -248,6 +315,45 @@ def _parse_quota_windows_from_summary(
     return families["gemini"]["short"], families["gemini"]["weekly"], bucket_count
 
 
+def _extract_single_bucket_quota(
+    quota_response: Mapping[str, object],
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Parse the /retrieveUserQuota fallback response.
+
+    The live API puts ``remainingFraction`` inside ``buckets[0]``, not at root.
+    Both camelCase and snake_case field names are supported.
+    Returns ``(short_window, weekly_window)`` dicts.
+    """
+    empty: dict[str, object] = {"status": "unknown", "value": None, "reset_at": None}
+
+    # Try root-level keys first (legacy behaviour / some mock shapes)
+    root_remaining = quota_response.get("remainingFraction") or quota_response.get("remaining_fraction")
+    root_reset = quota_response.get("resetTime") or quota_response.get("reset_time")
+
+    buckets = quota_response.get("buckets")
+    if isinstance(buckets, list) and buckets and isinstance(buckets[0], dict):
+        first = buckets[0]
+        remaining = first.get("remainingFraction") or first.get("remaining_fraction") or root_remaining
+        reset_raw = first.get("resetTime") or first.get("reset_time") or root_reset
+    else:
+        remaining = root_remaining
+        reset_raw = root_reset
+
+    reset_at = None
+    if isinstance(reset_raw, str):
+        reset_at = _normalize_timestamp(reset_raw.replace("Z", "+00:00"))
+
+    if isinstance(remaining, (int, float)):
+        short_window: dict[str, object] = {
+            "status": "known",
+            "value": round(float(remaining) * 100, 2),
+            "reset_at": reset_at,
+        }
+        return short_window, empty
+
+    return empty, empty
+
+
 def _persist_project_id(home_root: Path, project_id: str | None) -> None:
     if not project_id:
         return
@@ -257,15 +363,16 @@ def _persist_project_id(home_root: Path, project_id: str | None) -> None:
 
 
 def _extract_project_id(load_response: Mapping[str, object], home_root: Path) -> str | None:
-    project = load_response.get("cloudaicompanionProject")
-    if isinstance(project, str) and project.strip():
-        _persist_project_id(home_root, project.strip())
-        return project.strip()
-    if isinstance(project, dict):
-        project_id = project.get("id")
-        if isinstance(project_id, str) and project_id.strip():
-            _persist_project_id(home_root, project_id.strip())
-            return project_id.strip()
+    for key in ("cloudaicompanionProject", "cloudaicompanion_project"):
+        project = load_response.get(key)
+        if isinstance(project, str) and project.strip():
+            _persist_project_id(home_root, project.strip())
+            return project.strip()
+        if isinstance(project, dict):
+            project_id = project.get("id")
+            if isinstance(project_id, str) and project_id.strip():
+                _persist_project_id(home_root, project_id.strip())
+                return project_id.strip()
     cached = _read_text_if_exists(_project_id_path(home_root))
     return cached.strip() if isinstance(cached, str) and cached.strip() else None
 
@@ -273,12 +380,15 @@ def _extract_project_id(load_response: Mapping[str, object], home_root: Path) ->
 __all__ = [
     "CODE_ASSIST_BASE_URL",
     "CODE_ASSIST_LOAD_PATH",
+    "CODE_ASSIST_MODELS_PATH",
     "CODE_ASSIST_QUOTA_PATH",
     "CODE_ASSIST_QUOTA_SUMMARY_PATH",
     "CODE_ASSIST_USER_AGENT",
     "GOOGLE_USERINFO_URL",
     "_cloudcode_request",
+    "_extract_plan_tier",
     "_extract_project_id",
+    "_extract_single_bucket_quota",
     "_google_userinfo_request",
     "_parse_model_label",
     "_parse_quota_families_from_summary",
