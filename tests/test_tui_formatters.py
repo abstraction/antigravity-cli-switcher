@@ -317,6 +317,29 @@ class TUIBackgroundRefreshTests(unittest.TestCase):
                     worker_fn(app, "acc1")
                     mock_check_due.assert_not_called()
 
+    def test_refresh_account_worker_formats_percentage_values(self) -> None:
+        paths = build_paths("/tmp/mock_root")
+        app = ACSApp(paths)
+
+        with patch("antigravity_cli_switcher.tui.app.refresh_quota_data") as mock_refresh:
+            mock_res = type(
+                "MockRes",
+                (),
+                {
+                    "short_usage_status": "known",
+                    "weekly_usage_status": "known",
+                    "short_usage_value": 76.2,
+                    "weekly_usage_value": 68.2,
+                },
+            )()
+            mock_refresh.return_value = mock_res
+            with patch.object(app, "refresh_snapshot"):
+                with patch.object(app, "post_dashboard_message") as mock_post:
+                    worker_fn: Callable[[ACSApp, str], None] = inspect.unwrap(ACSApp._refresh_account_worker)
+                    worker_fn(app, "test_account_a")
+                    messages = [call.args[0].message for call in mock_post.call_args_list if call.args]
+                    self.assertIn("Quota updated for test_account_a: Gemini 76.2% / 68.2%", messages)
+
     def test_start_due_watcher_checks_immediately(self) -> None:
         paths = build_paths("/tmp/mock_root")
         app = ACSApp(paths)

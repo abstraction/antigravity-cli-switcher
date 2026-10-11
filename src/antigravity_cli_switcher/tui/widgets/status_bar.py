@@ -38,7 +38,17 @@ class StatusBar(Widget):
         msg = self.message
         width = self.size.width
 
-        if "fail" in msg.lower() or "error" in msg.lower() or "blocked" in msg.lower():
+        if "⚠️ [STEALTH]" in msg or "[STEALTH] Terminated" in msg:
+            text.append("⚠️ ", style="bold #ffffff on #dc4c4c")
+            if self.worker_status:
+                text.append(f"[{self.worker_status}] ", style="bold #ffffff on #dc4c4c")
+            text.append(f" {msg} ", style="bold #ffffff on #dc4c4c")
+        elif "[STEALTH] Cooldown active" in msg or ("cooldown" in msg.lower() and "stealth" in msg.lower()):
+            text.append("● ", style="bold #e06c75")
+            if self.worker_status:
+                text.append(f"[{self.worker_status}] ", style="bold #e06c75")
+            text.append(msg, style="bold #e06c75")
+        elif "fail" in msg.lower() or "error" in msg.lower() or "blocked" in msg.lower():
             text.append("✖ ", style="bold #dc4c4c")
             if self.worker_status:
                 text.append(f"[{self.worker_status}] ", style="bold #dc4c4c")

@@ -42,8 +42,10 @@ class ACSApp(App[int]):
         self.refresh_interval_seconds: int = 5
         self.due_check_interval_seconds: float = 5.0
         self._refresh_timer: Timer | None = None
+        self._cooldown_timer: Timer | None = None
         self._log_watch_started_at: float = time.time()
         self._refreshing_accounts: set[str] = set()
+        self._last_account_switch_at: str | None = None
         self._exit_event: threading.Event = threading.Event()
         self._pause_background: threading.Event = threading.Event()
 
@@ -51,6 +53,7 @@ class ACSApp(App[int]):
         self.push_screen(DashboardScreen(initial_tab=self.initial_tab))
         self.refresh_snapshot()
         self._refresh_timer = self.set_interval(float(self.refresh_interval_seconds), self.refresh_snapshot)
+        self._cooldown_timer = self.set_interval(1.0, self._tick_cooldown)
         self.start_log_watcher()
         self.start_due_watcher()
 
@@ -59,6 +62,36 @@ class ACSApp(App[int]):
         self._pause_background.set()
         if self._refresh_timer:
             self._refresh_timer.stop()
+        if self._cooldown_timer:
+            self._cooldown_timer.stop()
+
+    def record_account_switch(self, timestamp: str | None = None) -> None:
+        """Record account switch in memory to keep cooldown ticking without disk I/O."""
+        from antigravity_cli_switcher.manager.state import utc_now
+
+        self._last_account_switch_at = timestamp or utc_now().isoformat()
+
+    def get_switch_cooldown_remaining(self) -> float:
+        """Return remaining stealth switch cooldown in seconds without disk I/O."""
+        from antigravity_cli_switcher.manager.stealth import calculate_cooldown_remaining_from_iso
+
+        if self._last_account_switch_at is not None:
+            return calculate_cooldown_remaining_from_iso(self._last_account_switch_at)
+
+        from antigravity_cli_switcher.manager.accounts import get_switch_cooldown_remaining
+        from antigravity_cli_switcher.manager.state import load_state
+
+        try:
+            state = load_state(self.paths)
+            return get_switch_cooldown_remaining(state)
+        except Exception:
+            return 0.0
+
+    def _tick_cooldown(self) -> None:
+        rem = self.get_switch_cooldown_remaining()
+        for s in self.screen_stack:
+            if isinstance(s, DashboardScreen):
+                s.update_stealth_cooldown(rem)
 
     def post_dashboard_message(self, message: Message) -> None:
         """Deliver message directly to DashboardScreen without bubbling loops."""
@@ -81,6 +114,8 @@ class ACSApp(App[int]):
         self._pause_background.set()
         if self._refresh_timer:
             self._refresh_timer.stop()
+        if self._cooldown_timer:
+            self._cooldown_timer.stop()
         try:
             self.workers.cancel_group(self, "snapshot")
         except Exception:
@@ -112,6 +147,7 @@ class ACSApp(App[int]):
         finally:
             self._pause_background.clear()
             self._refresh_timer = self.set_interval(float(self.refresh_interval_seconds), self.refresh_snapshot)
+            self._cooldown_timer = self.set_interval(1.0, self._tick_cooldown)
             self.refresh_snapshot()
             self.refresh(layout=True)
 
@@ -122,6 +158,7 @@ class ACSApp(App[int]):
             return
         try:
             snapshot, verification = fetch_snapshot_data(self.paths)
+            self._last_account_switch_at = snapshot.switch_runtime.last_account_switch_at
             self.post_dashboard_message(SnapshotUpdated(snapshot, verification))
         except Exception as exc:
             self.post_dashboard_message(StatusMessage(f"Snapshot read failed: {exc}"))
@@ -144,7 +181,11 @@ class ACSApp(App[int]):
         self.post_dashboard_message(StatusMessage(f"Checking quota for {account_name}...", worker_status="CHECKING"))
         try:
             result = refresh_quota_data(self.paths, account_name)
-            msg = f"Quota updated for {account_name}: Gemini {result.short_usage_status} / {result.weekly_usage_status}"
+            short_val = getattr(result, "short_usage_value", None)
+            weekly_val = getattr(result, "weekly_usage_value", None)
+            short_str = f"{round(float(short_val), 1):g}%" if short_val is not None else result.short_usage_status
+            weekly_str = f"{round(float(weekly_val), 1):g}%" if weekly_val is not None else result.weekly_usage_status
+            msg = f"Quota updated for {account_name}: Gemini {short_str} / {weekly_str}"
             self.post_dashboard_message(StatusMessage(msg, worker_status=None))
             self.refresh_snapshot()
         except Exception as exc:

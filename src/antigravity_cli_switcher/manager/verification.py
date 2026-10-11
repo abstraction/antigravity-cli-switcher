@@ -85,7 +85,16 @@ def _derive_health_status(paths: ManagerPaths, name: str, meta: AccountMeta) -> 
     return HealthStatus.READY
 
 
-def verify_account(paths: ManagerPaths, name: str, meta: AccountMeta) -> AccountVerification:
+def verify_account(
+    paths: ManagerPaths,
+    name: str,
+    meta: AccountMeta,
+    state: dict | None = None,
+) -> AccountVerification:
+    from antigravity_cli_switcher.manager.paths import default_live_dir
+    from antigravity_cli_switcher.manager.state import get_live_dir
+    from antigravity_cli_switcher.manager.stealth import read_canonical_uuid_file
+
     account_path = account_dir(paths, name)
     profile_source = _resolve_profile_source(account_path)
     source_home = _resolve_home_source(account_path)
@@ -95,6 +104,22 @@ def verify_account(paths: ManagerPaths, name: str, meta: AccountMeta) -> Account
     has_access_token = False
     has_refresh_token = False
     access_token_expired = False
+
+    gemini_dir = account_path / ".gemini" if (account_path / ".gemini").is_dir() else account_path
+    cli_install_id = read_canonical_uuid_file(gemini_dir / "antigravity-cli" / "installation_id") or ""
+    root_install_id = read_canonical_uuid_file(gemini_dir / "installation_id") or ""
+
+    st = state if state is not None else sync_state_from_disk(paths, load_state(paths))
+    live_dir = get_live_dir(st) or default_live_dir(paths.root)
+    live_cli_file = live_dir / "antigravity-cli" / "installation_id"
+    live_cli_id = read_canonical_uuid_file(live_cli_file) or ""
+
+    if not cli_install_id:
+        install_status = "MISSING"
+    elif st.get("active") == name:
+        install_status = "MATCH" if live_cli_id == cli_install_id else "DESYNC"
+    else:
+        install_status = "MATCH" if (live_cli_id and live_cli_id == cli_install_id) else "SAVED"
 
     if has_artifacts:
         try:
@@ -206,6 +231,9 @@ def verify_account(paths: ManagerPaths, name: str, meta: AccountMeta) -> Account
         expected_email=meta.expected_email,
         colliding_account=token_ver.colliding_account if token_ver else None,
         is_synthetic=is_synthetic,
+        installation_id=cli_install_id,
+        root_installation_id=root_install_id,
+        installation_id_status=install_status,
     )
 
 
@@ -214,7 +242,7 @@ def verify_accounts(paths: ManagerPaths) -> SnapshotVerification:
     accounts = {}
     for name, meta_dict in sorted(state.get("accounts", {}).items()):
         meta = AccountMeta(**meta_dict)
-        accounts[name] = verify_account(paths, name, meta)
+        accounts[name] = verify_account(paths, name, meta, state=state)
     return SnapshotVerification(
         active=state.get("active"),
         switch_mode=get_switch_mode(state),

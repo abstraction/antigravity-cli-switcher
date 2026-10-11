@@ -27,6 +27,7 @@ from antigravity_cli_switcher.models import (
     SwitchPolicyUpdate,
 )
 from antigravity_cli_switcher.tui.modals.confirm import ConfirmModal
+from antigravity_cli_switcher.tui.modals.cooldown import StealthCooldownModal
 from antigravity_cli_switcher.tui.modals.email import EmailModal
 from antigravity_cli_switcher.tui.modals.login import LoginModal
 from antigravity_cli_switcher.tui.modals.policy import PolicyModal
@@ -60,12 +61,31 @@ class DashboardActionsScreenBase(Screen[None]):
     def _update_detail_from_selection(self) -> None:
         raise NotImplementedError
 
-    @work(thread=True)
     def action_activate(self, account_name: str | None = None) -> None:
         name = account_name or self._selected_account_name()
         if not name:
-            self.app.call_from_thread(self._set_status, "No account selected.")
+            self._set_status("No account selected.")
             return
+
+        cooldown = self.acs_app.get_switch_cooldown_remaining()
+        if cooldown > 0:
+
+            def on_cooldown_result(result: str | None) -> None:
+                if result in ("switch", "force"):
+                    self._run_activate_worker(name, force=(result == "force"))
+                else:
+                    self._set_status("Switch cancelled.")
+
+            self.app.push_screen(
+                StealthCooldownModal(target_account=name, remaining_seconds=cooldown),
+                on_cooldown_result,
+            )
+            return
+
+        self._run_activate_worker(name, force=False)
+
+    @work(thread=True)
+    def _run_activate_worker(self, name: str, *, force: bool = False) -> None:
         self.app.call_from_thread(self._set_status, f"Activating {name}...")
         try:
             import antigravity_cli_switcher.tui.screens.dashboard as dash_mod
@@ -73,18 +93,62 @@ class DashboardActionsScreenBase(Screen[None]):
             if self.snapshot and name in self.snapshot.accounts and not self.snapshot.accounts[name].enabled:
                 set_enabled(self.acs_app.paths, name, True)
 
-            dash_mod.switch_account(self.acs_app.paths, name)
-            self.app.call_from_thread(self._set_status, f"Activated {name}.")
+            terminated = _ensure_safe_account_switch()
+            try:
+                if force:
+                    dash_mod.switch_account(self.acs_app.paths, name, force=True)
+                else:
+                    dash_mod.switch_account(self.acs_app.paths, name)
+            except TypeError:
+                dash_mod.switch_account(self.acs_app.paths, name)
+            self.acs_app.record_account_switch()
+            if terminated:
+                pids_str = ", ".join(str(p) for p in terminated)
+                msg = f"Activated {name}. ⚠️ [STEALTH] Terminated external CLI session (PID: {pids_str}) to purge session header."
+            else:
+                msg = f"Activated {name}."
+            self.app.call_from_thread(self._set_status, msg)
             self.acs_app.refresh_snapshot()
         except Exception as exc:
             self.app.call_from_thread(self._set_status, f"Activation failed: {exc}")
 
-    @work(thread=True)
     def action_switch_next(self) -> None:
+        cooldown = self.acs_app.get_switch_cooldown_remaining()
+        if cooldown > 0:
+
+            def on_cooldown_result(result: str | None) -> None:
+                if result in ("switch", "force"):
+                    self._run_switch_next_worker(force=(result == "force"))
+                else:
+                    self._set_status("Switch cancelled.")
+
+            self.app.push_screen(
+                StealthCooldownModal(target_account="next eligible standby", remaining_seconds=cooldown),
+                on_cooldown_result,
+            )
+            return
+
+        self._run_switch_next_worker(force=False)
+
+    @work(thread=True)
+    def _run_switch_next_worker(self, *, force: bool = False) -> None:
         self.app.call_from_thread(self._set_status, "Switching to next account...")
         try:
-            next_name = switch_next(self.acs_app.paths)
-            self.app.call_from_thread(self._set_status, f"Switched to {next_name}.")
+            terminated = _ensure_safe_account_switch()
+            try:
+                if force:
+                    next_name = switch_next(self.acs_app.paths, force=True)
+                else:
+                    next_name = switch_next(self.acs_app.paths)
+            except TypeError:
+                next_name = switch_next(self.acs_app.paths)
+            self.acs_app.record_account_switch()
+            if terminated:
+                pids_str = ", ".join(str(p) for p in terminated)
+                msg = f"Switched to {next_name}. ⚠️ [STEALTH] Terminated external CLI session (PID: {pids_str}) to purge session header."
+            else:
+                msg = f"Switched to {next_name}."
+            self.app.call_from_thread(self._set_status, msg)
             self.acs_app.refresh_snapshot()
         except Exception as exc:
             self.app.call_from_thread(self._set_status, f"Switch failed: {exc}")
@@ -172,11 +236,12 @@ class DashboardActionsScreenBase(Screen[None]):
             if not result:
                 return
             acc_name, binary = result
-            try:
-                _ensure_safe_account_switch()
-            except RuntimeError as exc:
-                self._set_status(f"Login blocked: {exc}")
-                return
+            terminated = _ensure_safe_account_switch()
+            if terminated:
+                pids_str = ", ".join(str(p) for p in terminated)
+                self._set_status(
+                    f"⚠️ [STEALTH] Terminated external CLI session (PID: {pids_str}) to purge session header."
+                )
 
             try:
                 with self.acs_app.suspend_terminal():
@@ -203,11 +268,12 @@ class DashboardActionsScreenBase(Screen[None]):
             if not result:
                 return
             acc_name, binary = result
-            try:
-                _ensure_safe_account_switch()
-            except RuntimeError as exc:
-                self._set_status(f"Relogin blocked: {exc}")
-                return
+            terminated = _ensure_safe_account_switch()
+            if terminated:
+                pids_str = ", ".join(str(p) for p in terminated)
+                self._set_status(
+                    f"⚠️ [STEALTH] Terminated external CLI session (PID: {pids_str}) to purge session header."
+                )
 
             try:
                 with self.acs_app.suspend_terminal():

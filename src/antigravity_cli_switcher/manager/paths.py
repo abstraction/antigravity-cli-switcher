@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_ROOT_NAME = ".antigravity-cli-switcher"
-MANAGED_PROFILE_FILES = ("antigravity-cli/antigravity-oauth-token",)
+MANAGED_PROFILE_FILES = (
+    "antigravity-cli/antigravity-oauth-token",
+    "antigravity-cli/installation_id",
+    "installation_id",
+    "antigravity-cli/jetski_state.pbtxt",
+)
 LOGIN_ARTIFACT_SETS = (("antigravity-cli/antigravity-oauth-token",),)
 
 
@@ -74,6 +79,7 @@ def ensure_layout(paths: ManagerPaths) -> None:
                 "switch_history": [],
             },
         )
+    manager_pkg.backfill_account_identities(paths)
 
 
 def account_dir(paths: ManagerPaths, name: str) -> Path:

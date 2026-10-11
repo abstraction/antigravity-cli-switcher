@@ -33,69 +33,18 @@ from antigravity_cli_switcher.manager.state import (
 
 
 def _get_running_agy_processes() -> list[tuple[int, str]]:
-    current_uid = os.getuid()
-    current_pid = os.getpid()
+    from antigravity_cli_switcher.manager.stealth import get_external_agy_processes
 
-    agy_procs = []
-    try:
-        if sys.platform.startswith("linux"):
-            ps_cmd = ["ps", "-u", str(current_uid), "-o", "pid,args"]
-        elif sys.platform == "darwin":
-            ps_cmd = ["ps", "-u", str(current_uid), "-o", "pid,command"]
-        else:
-            return []
-
-        result = subprocess.run(ps_cmd, capture_output=True, text=True, check=True)
-        lines = result.stdout.strip().split("\n")[1:]
-
-        for line in lines:
-            parts = line.strip().split(maxsplit=1)
-            if len(parts) < 2:
-                continue
-
-            pid_str, cmd_str = parts
-            if not pid_str.isdigit():
-                continue
-
-            pid = int(pid_str)
-            if pid == current_pid:
-                continue
-
-            cmdline = cmd_str.split()
-            if not cmdline:
-                continue
-
-            is_agy = False
-            if cmdline[0] == "agy" or cmdline[0].endswith("/agy"):
-                is_agy = True
-            elif len(cmdline) >= 3 and cmdline[1] == "-m" and cmdline[2] == "agy":
-                is_agy = True
-            elif len(cmdline) >= 2 and ("python" in cmdline[0] or "python3" in cmdline[0]):
-                if cmdline[1].endswith("/agy") or cmdline[1] == "agy":
-                    is_agy = True
-
-            if is_agy:
-                if any(x in cmd_str for x in ("antigravity-cli-switcher", "acs", "agy-cli-manager", "acm")):
-                    is_agy = False
-
-            if is_agy:
-                agy_procs.append((pid, cmd_str))
-    except Exception:
-        pass
-
-    return agy_procs
+    pids = get_external_agy_processes()
+    return [(pid, str(pid)) for pid in pids]
 
 
-def _ensure_safe_account_switch() -> None:
+def _ensure_safe_account_switch() -> list[int]:
     if _is_test_environment():
-        return
-    procs = _get_running_agy_processes()
-    if procs:
-        pids = [str(p[0]) for p in procs]
-        raise RuntimeError(
-            f"Cannot safely switch accounts. Active 'agy' processes detected (PIDs: {', '.join(pids)}). "
-            f"Please terminate them to avoid global OS keyring corruption."
-        )
+        return []
+    from antigravity_cli_switcher.manager.stealth import terminate_external_agy_processes
+
+    return terminate_external_agy_processes()
 
 
 def login_account(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -258,13 +259,27 @@ def rotate_after_failure_locked(
     state = sync_state_from_disk(paths, state)
 
     switched_to = None
+    from antigravity_cli_switcher.manager.keyring import _is_test_environment
+    from antigravity_cli_switcher.manager.stealth import get_switch_cooldown_remaining
+
+    should_enforce_cooldown = not _is_test_environment() or bool(os.getenv("ACS_ENFORCE_COOLDOWN"))
+    cooldown_rem = get_switch_cooldown_remaining(state)
+    cooldown_blocked = False
+
     if force_switch or switch_mode == "auto":
-        switched_to = _best_switch_candidate(paths, state, exclude=previous, required_family=family)
-        if switched_to:
-            _copy_active_runtime(paths, switched_to)
-            state["active"] = switched_to
-            state = sync_state_from_disk(paths, state)
-            _sync_runtime_to_live_dir(paths, state)
+        if not force_switch and should_enforce_cooldown and cooldown_rem > 0:
+            cooldown_blocked = True
+            logger.warning(f"Automated failover switch blocked by stealth cooldown: {int(cooldown_rem)}s remaining")
+        else:
+            switched_to = _best_switch_candidate(paths, state, exclude=previous, required_family=family)
+            if switched_to:
+                from antigravity_cli_switcher.manager.login import _ensure_safe_account_switch
+
+                _ensure_safe_account_switch()
+                _copy_active_runtime(paths, switched_to)
+                state["active"] = switched_to
+                state = sync_state_from_disk(paths, state)
+                _sync_runtime_to_live_dir(paths, state)
 
     _mark_switch_runtime(
         state,
@@ -276,8 +291,16 @@ def rotate_after_failure_locked(
         active=state.get("active"),
         previous_active=previous,
         completed_at=utc_now().isoformat(),
+        last_account_switch_at=now_iso if switched_to else None,
     )
-    outcome = "switched" if state.get("active") else ("switch_disabled" if switch_mode != "auto" else "no_candidate")
+    if state.get("active"):
+        outcome = "switched"
+    elif cooldown_blocked:
+        outcome = "cooldown_blocked"
+    elif switch_mode != "auto":
+        outcome = "switch_disabled"
+    else:
+        outcome = "no_candidate"
     _append_switch_history(
         state,
         reason=reason,

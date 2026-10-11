@@ -255,7 +255,7 @@ def _make_watch_harness(tmp: Path, names: tuple[str, ...] = ("account-a", "accou
     return paths, live_dir, log_path
 
 
-def _expire_switch_dedupe(paths, seconds: int = 30) -> None:
+def _expire_switch_dedupe(paths, seconds: int = 70) -> None:
     with manager_lock(paths):
         state = load_state(paths)
         runtime = dict(state.get("switch_runtime") or {})

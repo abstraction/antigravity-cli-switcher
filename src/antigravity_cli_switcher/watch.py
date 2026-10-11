@@ -155,12 +155,15 @@ def poll_quota_logs(
             should_rotate = rotate and (force_switch or switch_mode == "auto")
             if should_rotate:
                 logger.info("Log-watch initiating rotate_after_failure due to quota limit")
+                from antigravity_cli_switcher.manager.state import DEFAULT_SWITCH_DEDUPE_SECONDS
+
+                effective_dedupe = 0 if new_session_logs else DEFAULT_SWITCH_DEDUPE_SECONDS
                 rotation = rotate_after_failure_locked(
                     paths,
                     reason="quota",
                     cooldown_minutes=cooldown_minutes,
                     force_switch=force_switch,
-                    dedupe_seconds=0,
+                    dedupe_seconds=effective_dedupe,
                     trigger="log-watch",
                 )
                 rotated = rotation.outcome == "switched"

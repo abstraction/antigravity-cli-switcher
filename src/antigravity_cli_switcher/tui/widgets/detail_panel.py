@@ -41,6 +41,7 @@ class DetailPanel(Widget):
         self._last_meta: AccountMeta | None = None
         self._last_ver: AccountVerification | None = None
         self._last_util: AccountUtilizationRecord | None = None
+        self._last_cooldown_remaining: float = 0.0
 
     def compose(self) -> ComposeResult:
         yield Static("Overview", id="detail-title")
@@ -48,7 +49,13 @@ class DetailPanel(Widget):
 
     def on_resize(self, event: events.Resize) -> None:
         if self._last_name and self._last_meta:
-            self.update_detail(self._last_name, self._last_meta, self._last_ver, self._last_util)
+            self.update_detail(
+                self._last_name,
+                self._last_meta,
+                self._last_ver,
+                self._last_util,
+                self._last_cooldown_remaining,
+            )
 
     def _render_quota_window(
         self,
@@ -91,12 +98,14 @@ class DetailPanel(Widget):
         meta: AccountMeta | None,
         verification: AccountVerification | None,
         utilization: AccountUtilizationRecord | None = None,
+        cooldown_remaining: float = 0.0,
     ) -> None:
         """Update the panel contents for the given account."""
         self._last_name = name
         self._last_meta = meta
         self._last_ver = verification
         self._last_util = utilization
+        self._last_cooldown_remaining = cooldown_remaining
 
         title_static = self.query_one("#detail-title", Static)
         content_static = self.query_one("#detail-content", Static)
@@ -162,6 +171,35 @@ class DetailPanel(Widget):
         mode_str = f"{meta.status} │ {'enabled' if meta.enabled else 'disabled'}"
         status_str = str(meta.health_status.value if hasattr(meta.health_status, "value") else meta.health_status)
 
+        # Stealth identity and cooldown formatting
+        cli_id = verification.installation_id if verification and verification.installation_id else ""
+        root_id = verification.root_installation_id if verification and verification.root_installation_id else ""
+        id_status = (
+            verification.installation_id_status if verification and verification.installation_id_status else "MISSING"
+        )
+
+        status_style = (
+            "bold #77ca9b"
+            if id_status == "MATCH"
+            else ("bold #dc4c4c" if id_status in ("DESYNC", "MISSING") else "dim cyan")
+        )
+
+        install_text = Text()
+        if cli_id:
+            install_text.append(f"{cli_id[:8]}… ", style="#e6edf3")
+            install_text.append(f"[{id_status}]", style=status_style)
+        else:
+            install_text.append("[MISSING]", style="bold #dc4c4c")
+
+        live_match_text = Text(f"[{id_status}]", style=status_style)
+        root_text = Text(f"{root_id[:8]}…" if root_id else "-", style="#e6edf3" if root_id else "dim")
+
+        cd_text = Text()
+        if cooldown_remaining > 0:
+            cd_text.append(f"{int(cooldown_remaining)}s remaining (hold)", style="bold #e06c75")
+        else:
+            cd_text.append("Ready", style="bold #77ca9b")
+
         text = Text()
         width = self.size.width
 
@@ -190,6 +228,10 @@ class DetailPanel(Widget):
                 ("Gemini Wk", gemini_wk),
                 ("Other 5h", other_5h),
                 ("Next Ref", next_ref),
+                ("Install ID", install_text),
+                ("Root ID", root_text),
+                ("Live Match", live_match_text),
+                ("Stealth CD", cd_text),
                 ("Problem", prob_str),
                 ("Status", f"{status_str} (fails: {meta.fail_count})"),
             ]
@@ -206,18 +248,25 @@ class DetailPanel(Widget):
                     text.append(f"{v}\n", style="#e6edf3")
         else:
             # 2-column key-value presentation tightened to 71 cols
-            lines: list[tuple[str, str, str, str | Text]] = [
+            lines: list[tuple[str, str | Text, str, str | Text]] = [
                 ("Token Email", tok_email, "Gemini 5h", gemini_5h),
                 ("Exp. Email", exp_email, "Gemini Wk", gemini_wk),
                 ("Plan", meta.plan_type or "unknown", "Other 5h", other_5h),
                 ("Mode", mode_str, "Other Wk", other_wk),
                 ("Next Refresh", next_ref, "Backend", meta.last_quota_backend or "-"),
                 ("Failures", str(meta.fail_count), "Problem", prob_str),
+                ("Install ID", install_text, "Stealth CD", cd_text),
+                ("Root ID", root_text, "Live Match", live_match_text),
             ]
             for k1, v1, k2, v2 in lines:
-                disp_v1 = v1 if len(v1) <= 20 else v1[:19] + "…"
                 text.append(f"{k1:<12}: ", style="#8b949e")
-                text.append(f"{disp_v1:<20} ", style="#e6edf3")
+                if isinstance(v1, Text):
+                    text.append_text(v1)
+                    pad = max(1, 21 - v1.cell_len)
+                    text.append(" " * pad)
+                else:
+                    disp_v1 = v1 if len(v1) <= 20 else v1[:19] + "…"
+                    text.append(f"{disp_v1:<20} ", style="#e6edf3")
                 text.append("╎ ", style="#333333")
                 text.append(f"{k2:<10}: ", style="#8b949e")
                 if isinstance(v2, Text):

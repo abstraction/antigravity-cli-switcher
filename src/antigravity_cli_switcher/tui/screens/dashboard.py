@@ -219,12 +219,23 @@ class DashboardScreen(DashboardActionsScreenBase):
             row_key_val = str(event.row_key.value) if event.row_key and event.row_key.value is not None else None
             self.action_activate(row_key_val)
 
-    def _update_detail_from_selection(self) -> None:
+    def update_stealth_cooldown(self, remaining: float) -> None:
+        try:
+            hb = self.query_one(HeaderBar)
+            hb.cooldown_seconds = remaining
+        except Exception:
+            pass
+        self._update_detail_from_selection(cooldown_remaining=remaining)
+
+    def _update_detail_from_selection(self, cooldown_remaining: float | None = None) -> None:
         if not self.snapshot:
             return
         table = self.query_one("#account-table", AccountTable)
         name = table.get_selected_account_name()
         detail = self.query_one("#detail-panel", DetailPanel)
+        cooldown_rem = (
+            cooldown_remaining if cooldown_remaining is not None else self.acs_app.get_switch_cooldown_remaining()
+        )
         if name and name in self.snapshot.accounts:
             meta = self.snapshot.accounts[name]
             ver = self.verification.accounts.get(name) if self.verification else None
@@ -233,9 +244,9 @@ class DashboardScreen(DashboardActionsScreenBase):
                 if self.snapshot.fleet_utilization and name in self.snapshot.fleet_utilization.accounts
                 else None
             )
-            detail.update_detail(name, meta, ver, util)
+            detail.update_detail(name, meta, ver, util, cooldown_remaining=cooldown_rem)
         else:
-            detail.update_detail(None, None, None, None)
+            detail.update_detail(None, None, None, None, cooldown_remaining=cooldown_rem)
 
     def _selected_account_name(self) -> str | None:
         tabs = self.query_one("#main-tabs", TabbedContent)

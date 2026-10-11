@@ -25,7 +25,7 @@ from antigravity_cli_switcher.manager.policy import (
 DEFAULT_REFRESH_POLICY_SECONDS = 1800
 USAGE_WINDOW_NAMES = ("short", "weekly")
 USAGE_FAMILY_NAMES = ("gemini", "other")
-DEFAULT_SWITCH_DEDUPE_SECONDS = 15
+DEFAULT_SWITCH_DEDUPE_SECONDS = 60
 
 
 def utc_now() -> datetime:
@@ -180,6 +180,7 @@ def _default_switch_runtime() -> dict[str, object]:
         "previous_active": None,
         "last_started_at": None,
         "last_completed_at": None,
+        "last_account_switch_at": None,
     }
 
 
@@ -192,7 +193,16 @@ def _normalize_switch_runtime(raw: object) -> dict[str, object]:
     if status not in {"idle", "switching", "ready", "no_account"}:
         status = "idle"
     runtime["status"] = status
-    for key in ("reason", "trigger", "request_id", "active", "previous_active", "last_started_at", "last_completed_at"):
+    for key in (
+        "reason",
+        "trigger",
+        "request_id",
+        "active",
+        "previous_active",
+        "last_started_at",
+        "last_completed_at",
+        "last_account_switch_at",
+    ):
         value = runtime.get(key)
         runtime[key] = value if isinstance(value, str) or value is None else str(value)
     return runtime
@@ -210,6 +220,7 @@ def _mark_switch_runtime(
     previous_active: str | None = None,
     started_at: str | None = None,
     completed_at: str | None = None,
+    last_account_switch_at: str | None = None,
 ) -> None:
     runtime = _normalize_switch_runtime(state.get("switch_runtime"))
     runtime["status"] = status
@@ -223,6 +234,8 @@ def _mark_switch_runtime(
         runtime["last_started_at"] = started_at
     if completed_at is not None:
         runtime["last_completed_at"] = completed_at
+    if last_account_switch_at is not None:
+        runtime["last_account_switch_at"] = last_account_switch_at
     state["switch_runtime"] = runtime
 
 

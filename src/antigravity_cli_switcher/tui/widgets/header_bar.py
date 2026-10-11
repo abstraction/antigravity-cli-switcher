@@ -20,9 +20,13 @@ class HeaderBar(Widget):
     sort_mode: reactive[str] = reactive("usage-low")
     quota_backend: reactive[str] = reactive("http")
     candidate_strategy: reactive[str] = reactive("squeeze")
+    cooldown_seconds: reactive[float] = reactive(0.0)
 
     def compose(self) -> ComposeResult:
         yield Static(id="header-content")
+
+    def watch_cooldown_seconds(self, value: float) -> None:
+        self._refresh_content()
 
     def watch_active_account(self, value: str | None) -> None:
         self._refresh_content()
@@ -90,6 +94,9 @@ class HeaderBar(Widget):
         else:
             candidates.append((self.quota_backend, backend_style))
             candidates.append((self.switch_mode, mode_style))
+
+        if self.cooldown_seconds > 0:
+            candidates.insert(0, (f"{int(self.cooldown_seconds)}s CD", "bold #ff6b6b"))
 
         # Dynamically append tokens that fit comfortably within width
         current_len = text.cell_len

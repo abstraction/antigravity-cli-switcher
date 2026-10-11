@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from antigravity_cli_switcher.manager.identity import (
     profile_has_login_artifacts,
 )
 from antigravity_cli_switcher.manager.keyring import (
+    _is_test_environment,
     _sync_home_to_keyring,
 )
 from antigravity_cli_switcher.manager.locking import manager_lock
@@ -59,6 +61,10 @@ from antigravity_cli_switcher.manager.state import (
     sync_state_from_disk,
     utc_now,
 )
+from antigravity_cli_switcher.manager.stealth import (
+    STEALTH_SWITCH_COOLDOWN_SECONDS,
+    get_switch_cooldown_remaining,
+)
 from antigravity_cli_switcher.manager.verification import (
     _derive_health_status,
     verify_account,
@@ -89,7 +95,7 @@ def _sync_runtime_to_live_dir(paths: ManagerPaths, state: dict) -> None:
     _sync_home_to_keyring(paths.runtime_dir)
 
 
-def switch_account(paths: ManagerPaths, name: str) -> str:
+def switch_account(paths: ManagerPaths, name: str, *, force: bool = False) -> str:
     logger = get_logger(paths.root)
     with manager_lock(paths):
         state = sync_state_from_disk(paths, load_state(paths))
@@ -104,17 +110,30 @@ def switch_account(paths: ManagerPaths, name: str) -> str:
                 f"Token mismatch for '{resolved_name}': expected {match_result.expected_email}, "
                 f"got {match_result.token_email}. Run 'acs login {resolved_name}' to fix."
             )
+        is_same_account = state.get("active") == resolved_name
+        should_enforce_cooldown = not _is_test_environment() or bool(os.getenv("ACS_ENFORCE_COOLDOWN"))
+        if not is_same_account and not force and should_enforce_cooldown:
+            cooldown_rem = get_switch_cooldown_remaining(state)
+            if cooldown_rem > 0:
+                raise RuntimeError(
+                    f"Stealth cooldown active: {int(cooldown_rem)}s remaining before next switch allowed. Use --force to bypass."
+                )
+        _ensure_safe_account_switch()
         previous = state.get("active")
         _copy_active_runtime(paths, resolved_name)
         state["active"] = resolved_name
         state = sync_state_from_disk(paths, state)
+        runtime = _normalize_switch_runtime(state.get("switch_runtime"))
+        if not is_same_account:
+            runtime["last_account_switch_at"] = utc_now().isoformat()
+        state["switch_runtime"] = runtime
         _sync_runtime_to_live_dir(paths, state)
         save_state(paths, state)
         logger.info(f"Switched active account to: {resolved_name}")
         return previous or ""
 
 
-def switch_next(paths: ManagerPaths) -> str:
+def switch_next(paths: ManagerPaths, *, force: bool = False) -> str:
     from antigravity_cli_switcher.manager.candidates import _eligible_switch_candidates
     from antigravity_cli_switcher.manager.routing import _best_switch_candidate
 
@@ -132,9 +151,20 @@ def switch_next(paths: ManagerPaths) -> str:
             raise ValueError("No eligible standby account is available.")
         if len(candidates) == 1 and current == target:
             raise ValueError("Only one eligible account is available.")
+        should_enforce_cooldown = not _is_test_environment() or bool(os.getenv("ACS_ENFORCE_COOLDOWN"))
+        if not force and should_enforce_cooldown:
+            cooldown_rem = get_switch_cooldown_remaining(state)
+            if cooldown_rem > 0:
+                raise RuntimeError(
+                    f"Stealth cooldown active: {int(cooldown_rem)}s remaining before next switch allowed. Use --force to bypass."
+                )
+        _ensure_safe_account_switch()
         _copy_active_runtime(paths, target)
         state["active"] = target
         state = sync_state_from_disk(paths, state)
+        runtime = _normalize_switch_runtime(state.get("switch_runtime"))
+        runtime["last_account_switch_at"] = utc_now().isoformat()
+        state["switch_runtime"] = runtime
         _sync_runtime_to_live_dir(paths, state)
         save_state(paths, state)
         logger = get_logger(paths.root)
@@ -362,6 +392,7 @@ def format_status(paths: ManagerPaths) -> str:
 
 
 __all__ = [
+    "STEALTH_SWITCH_COOLDOWN_SECONDS",
     "_copy_active_runtime",
     "_derive_health_status",
     "_ensure_safe_account_switch",
@@ -375,6 +406,7 @@ __all__ = [
     "format_status",
     "get_account_proxy",
     "get_status_snapshot",
+    "get_switch_cooldown_remaining",
     "import_current",
     "list_account_proxies",
     "login_account",

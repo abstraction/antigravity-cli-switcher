@@ -56,6 +56,8 @@ def cmd_rotate_after_failure(paths: ManagerPaths, args: argparse.Namespace) -> i
             print(f"rotated: {rotate_res.previous_active} -> {rotate_res.switched_to}")
         elif rotate_res.outcome == "already_switched":
             print(f"already-switched: {rotate_res.active or '-'}")
+        elif rotate_res.outcome == "cooldown_blocked":
+            print(f"cooldown-blocked: {rotate_res.previous_active}")
         elif rotate_res.previous_active and get_status_snapshot(paths).get("switch_mode", "auto") == "manual":
             print(f"marked-bad-manual-mode: {rotate_res.previous_active}")
         elif rotate_res.previous_active:

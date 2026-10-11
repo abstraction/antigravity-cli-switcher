@@ -104,6 +104,10 @@ def save_account_profile(paths: ManagerPaths, name: str, source_dir: Path, overw
     else:
         target.mkdir(parents=True, exist_ok=False)
     _copy_account_profile(home_source, target)
+    from antigravity_cli_switcher.manager.stealth import ensure_account_identity_files
+
+    gemini_target = target / ".gemini" if (target / ".gemini").is_dir() else target
+    ensure_account_identity_files(gemini_target)
     identity = _best_effort_saved_profile_identity(target)
 
     with manager_lock(paths):

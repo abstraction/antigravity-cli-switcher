@@ -1,6 +1,7 @@
 """Modal dialogs for ACS Textual application."""
 
 from antigravity_cli_switcher.tui.modals.confirm import ConfirmModal
+from antigravity_cli_switcher.tui.modals.cooldown import StealthCooldownModal
 from antigravity_cli_switcher.tui.modals.email import EmailModal
 from antigravity_cli_switcher.tui.modals.help import HelpModal
 from antigravity_cli_switcher.tui.modals.login import LoginModal
@@ -16,4 +17,5 @@ __all__ = [
     "PolicyModal",
     "ProxyModal",
     "RenameModal",
+    "StealthCooldownModal",
 ]

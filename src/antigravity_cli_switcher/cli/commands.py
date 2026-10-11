@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from antigravity_cli_switcher.cli.interactive import (
@@ -340,7 +341,12 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
     if cmd == "switch" or cmd == "activate":
         raw_name = " ".join(args.name) if isinstance(args.name, list) else args.name
         verb = "switched" if cmd == "switch" else "activated"
-        previous = switch_account(paths, raw_name)
+        force = bool(getattr(args, "force", False))
+        try:
+            previous = switch_account(paths, raw_name, force=force)
+        except RuntimeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         state = load_state(paths)
         resolved_name = state.get("active") or raw_name
         if previous:
@@ -349,11 +355,21 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
             print(f"{verb}: {resolved_name}")
         return 0
     if cmd == "switch-next":
-        target = switch_next(paths)
+        force = bool(getattr(args, "force", False))
+        try:
+            target = switch_next(paths, force=force)
+        except RuntimeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         print(f"switched-next: {target}")
         return 0
     if cmd == "rotate":
-        target = switch_next(paths)
+        force = bool(getattr(args, "force", False))
+        try:
+            target = switch_next(paths, force=force)
+        except RuntimeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         if args.json:
             print(json.dumps({"active": target}, indent=2, sort_keys=True))
         else:

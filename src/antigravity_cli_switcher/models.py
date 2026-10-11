@@ -142,6 +142,9 @@ class AccountVerification(BaseModel):
     expected_email: str | None = None
     colliding_account: str | None = None
     is_synthetic: bool = False
+    installation_id: str = ""
+    root_installation_id: str = ""
+    installation_id_status: str = "ok"
 
 
 class SwitchPolicy(BaseModel):
@@ -181,6 +184,7 @@ class SwitchRuntime(BaseModel):
     previous_active: str | None = None
     last_started_at: str | None = None
     last_completed_at: str | None = None
+    last_account_switch_at: str | None = None
 
 
 class SwitchHistoryEntry(BaseModel):

@@ -25,6 +25,12 @@ from antigravity_cli_switcher.manager.state import (
     load_state,
     sync_state_from_disk,
 )
+from antigravity_cli_switcher.manager.stealth import (
+    ensure_account_identity_files,
+    extract_jetski_uuid,
+    read_canonical_uuid_file,
+    write_canonical_uuid_file,
+)
 
 
 @dataclass(frozen=True)
@@ -195,6 +201,140 @@ def check_hygiene(paths: ManagerPaths) -> list[HygieneAuditResult]:
             )
         )
 
+    # 5. Identity files audit (installation_id and jetski_state)
+    cli_ids: dict[str, list[str]] = {}
+    root_ids: dict[str, list[str]] = {}
+
+    for name in sorted(state.get("accounts", {}).keys()):
+        adir = account_dir(paths, name)
+        gdir = adir / ".gemini" if (adir / ".gemini").is_dir() else adir
+
+        # CLI installation_id
+        cli_file = gdir / "antigravity-cli" / "installation_id"
+        if not cli_file.is_file():
+            results.append(
+                HygieneAuditResult(
+                    target=name,
+                    category="installation_id",
+                    status="warning",
+                    detail="Missing CLI installation_id file",
+                    remediation=f"Run 'acs hygiene --fix' to generate ID for '{name}'.",
+                )
+            )
+        else:
+            cli_id = read_canonical_uuid_file(cli_file)
+            if not cli_id:
+                results.append(
+                    HygieneAuditResult(
+                        target=name,
+                        category="installation_id",
+                        status="contaminated",
+                        detail=f"Malformed CLI installation_id file ({cli_file})",
+                        remediation=f"Run 'acs hygiene --fix' to repair ID for '{name}'.",
+                    )
+                )
+            else:
+                cli_ids.setdefault(cli_id, []).append(name)
+
+        # Root installation_id
+        root_file = gdir / "installation_id"
+        if not root_file.is_file():
+            results.append(
+                HygieneAuditResult(
+                    target=name,
+                    category="installation_id",
+                    status="warning",
+                    detail="Missing root Gemini installation_id file",
+                    remediation=f"Run 'acs hygiene --fix' to backfill root ID for '{name}'.",
+                )
+            )
+        else:
+            root_id = read_canonical_uuid_file(root_file)
+            if not root_id:
+                results.append(
+                    HygieneAuditResult(
+                        target=name,
+                        category="installation_id",
+                        status="contaminated",
+                        detail=f"Malformed root installation_id file ({root_file})",
+                        remediation=f"Run 'acs hygiene --fix' to repair root ID for '{name}'.",
+                    )
+                )
+            else:
+                root_ids.setdefault(root_id, []).append(name)
+
+        # jetski_state.pbtxt
+        jetski_file = gdir / "antigravity-cli" / "jetski_state.pbtxt"
+        if not jetski_file.is_file():
+            results.append(
+                HygieneAuditResult(
+                    target=name,
+                    category="jetski_state",
+                    status="warning",
+                    detail="Missing jetski_state.pbtxt",
+                    remediation=f"Run 'acs hygiene --fix' to backfill jetski state for '{name}'.",
+                )
+            )
+        else:
+            try:
+                content = jetski_file.read_text(encoding="utf-8")
+                if not extract_jetski_uuid(content):
+                    results.append(
+                        HygieneAuditResult(
+                            target=name,
+                            category="jetski_state",
+                            status="warning",
+                            detail="jetski_state.pbtxt missing valid installation_uuid",
+                            remediation=f"Run 'acs hygiene --fix' to repair installation_uuid for '{name}'.",
+                        )
+                    )
+            except OSError as exc:
+                results.append(
+                    HygieneAuditResult(
+                        target=name,
+                        category="jetski_state",
+                        status="warning",
+                        detail=f"Error reading jetski_state.pbtxt: {exc}",
+                        remediation=f"Run 'acs hygiene --fix' to repair jetski state for '{name}'.",
+                    )
+                )
+
+    # Collision checks
+    for cid, names in cli_ids.items():
+        if len(names) > 1:
+            for n in names:
+                other = [x for x in names if x != n]
+                results.append(
+                    HygieneAuditResult(
+                        target=n,
+                        category="installation_id",
+                        status="contaminated",
+                        detail=f"Installation ID collision with {', '.join(other)} ({cid[:8]}…)",
+                        remediation="Run 'acs hygiene --fix' to assign unique IDs.",
+                    )
+                )
+
+    # Active profile live match check
+    active = state.get("active")
+    if active:
+        act_dir = account_dir(paths, active)
+        act_gdir = act_dir / ".gemini" if (act_dir / ".gemini").is_dir() else act_dir
+        act_cli_file = act_gdir / "antigravity-cli" / "installation_id"
+        live_cli_file = live_dir / "antigravity-cli" / "installation_id"
+        if act_cli_file.is_file() and live_cli_file.is_file():
+            act_id = read_canonical_uuid_file(act_cli_file)
+            live_id = read_canonical_uuid_file(live_cli_file)
+            if act_id and live_id and act_id != live_id:
+                results.append(
+                    HygieneAuditResult(
+                        target=active,
+                        category="installation_id",
+                        status="contaminated",
+                        detail=f"Live installation_id ({live_id[:8]}…) does not match active profile ({act_id[:8]}…)",
+                        remediation="Run 'acs hygiene --fix' or 'acs apply' to synchronize.",
+                    )
+                )
+
     return results
 
 
@@ -250,5 +390,43 @@ def fix_hygiene(paths: ManagerPaths) -> list[str]:
                     actions_taken.append(f"Copied authentic '{active}' token to runtime directory.")
         except Exception:
             pass
+
+    # 4. Repair identity files and resolve collisions
+    seen_cli_ids: set[str] = set()
+    seen_root_ids: set[str] = set()
+    for name in sorted(state.get("accounts", {}).keys()):
+        adir = account_dir(paths, name)
+        gdir = adir / ".gemini" if (adir / ".gemini").is_dir() else adir
+        cli_file = gdir / "antigravity-cli" / "installation_id"
+        root_file = gdir / "installation_id"
+
+        existing_cli = read_canonical_uuid_file(cli_file)
+        if not existing_cli or existing_cli in seen_cli_ids:
+            new_id = write_canonical_uuid_file(cli_file)
+            seen_cli_ids.add(new_id)
+            actions_taken.append(f"Assigned unique CLI installation_id for '{name}'.")
+        else:
+            seen_cli_ids.add(existing_cli)
+
+        existing_root = read_canonical_uuid_file(root_file)
+        if not existing_root or existing_root in seen_root_ids:
+            new_root = write_canonical_uuid_file(root_file)
+            seen_root_ids.add(new_root)
+            actions_taken.append(f"Assigned unique root installation_id for '{name}'.")
+        else:
+            seen_root_ids.add(existing_root)
+
+        ensure_account_identity_files(gdir)
+
+    # 5. Synchronize active account identity files to live and runtime
+    if active and account_dir(paths, active).exists():
+        from antigravity_cli_switcher.manager.accounts import (
+            _copy_active_runtime,
+            _sync_runtime_to_live_dir,
+        )
+
+        _copy_active_runtime(paths, active)
+        _sync_runtime_to_live_dir(paths, state)
+        actions_taken.append(f"Synchronized active profile '{active}' identity files to runtime and live host.")
 
     return actions_taken
