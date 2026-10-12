@@ -262,7 +262,6 @@ class TestModelsCatalogDualFormat(unittest.TestCase):
                 return_value="synthetic_access_token",
             ),
             mock.patch("antigravity_cli_switcher.manager.models_catalog._cloudcode_request", mock_req),
-            mock.patch("antigravity_cli_switcher.manager.models_catalog._isolated_keyring_warmup"),
             mock.patch("antigravity_cli_switcher.manager.models_catalog._run_agy_models_command", mock_run_agy),
         ):
             result = list_models(paths, name="acc_alpha")
