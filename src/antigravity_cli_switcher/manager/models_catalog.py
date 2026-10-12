@@ -7,11 +7,9 @@ from pathlib import Path
 from antigravity_cli_switcher.manager.cloudcode import (
     CODE_ASSIST_MODELS_PATH,
     _cloudcode_request,
-    _extract_project_id,
     _parse_model_label,
 )
 from antigravity_cli_switcher.manager.identity import check_token_account_match
-from antigravity_cli_switcher.manager.keyring import _isolated_keyring_warmup
 from antigravity_cli_switcher.manager.locking import manager_lock
 from antigravity_cli_switcher.manager.paths import ManagerPaths, resolve_agy_binary
 from antigravity_cli_switcher.manager.state import load_state, sync_state_from_disk
@@ -120,17 +118,37 @@ def list_models(
         )
 
     models: list[dict[str, object]] = []
+    account_data = state.get("accounts", {}).get(account_name, {}) if isinstance(state.get("accounts"), dict) else {}
+    proxy_url: str | None = None
+    if isinstance(account_data, dict):
+        from antigravity_cli_switcher.manager.state import _normalize_proxy_config
+
+        proxy_cfg = _normalize_proxy_config(account_data.get("proxy"))
+        if proxy_cfg.get("enabled") and proxy_cfg.get("url"):
+            proxy_url = str(proxy_cfg["url"])
+
     try:
-        access_token = _ensure_fresh_access_token(source_home, agy_binary=agy_binary, timeout_seconds=timeout_seconds)
-        project_id = _extract_project_id({}, source_home)
-        if not project_id and isinstance(state.get("accounts"), dict):
-            account_data = state["accounts"].get(account_name)
-            if isinstance(account_data, dict):
-                cand = account_data.get("project_id")
-                if isinstance(cand, str) and cand.strip():
-                    project_id = cand.strip()
+        access_token = _ensure_fresh_access_token(
+            source_home, agy_binary=agy_binary, timeout_seconds=timeout_seconds, proxy_url=proxy_url
+        )
+        cand = account_data.get("project_id") if isinstance(account_data, dict) else None
+        project_id = str(cand).strip() if isinstance(cand, str) and cand.strip() else None
+        if not project_id:
+            account_cache = source_home / ".gemini" / "antigravity-cli" / "cache" / "default_project_id.txt"
+            if not account_cache.is_file():
+                account_cache = source_home / "antigravity-cli" / "cache" / "default_project_id.txt"
+            if account_cache.is_file():
+                try:
+                    val = account_cache.read_text(encoding="utf-8").strip()
+                    if val:
+                        project_id = val
+                except OSError:
+                    pass
         payload: dict[str, object] = {"project": project_id} if project_id else {}
-        load_response = _cloudcode_request(access_token, CODE_ASSIST_MODELS_PATH, payload)
+        if proxy_url:
+            load_response = _cloudcode_request(access_token, CODE_ASSIST_MODELS_PATH, payload, proxy_url=proxy_url)
+        else:
+            load_response = _cloudcode_request(access_token, CODE_ASSIST_MODELS_PATH, payload)
         raw_models = load_response.get("models")
         if raw_models is None and isinstance(load_response.get("response"), dict):
             raw_models = load_response["response"].get("models")
@@ -145,10 +163,6 @@ def list_models(
             models = parsed_models
     except Exception:
         pass
-
-    if not models:
-        with _isolated_keyring_warmup(source_home):
-            models = _run_agy_models_command(source_home, agy_binary=agy_binary, timeout_seconds=timeout_seconds)
 
     return {
         "account": account_name,

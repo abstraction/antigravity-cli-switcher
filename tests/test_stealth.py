@@ -57,8 +57,13 @@ def test_uuid_validation_and_canonical_formatting(tmp_path: Path) -> None:
     read_val = read_canonical_uuid_file(target)
     assert read_val == valid_uuid
 
-    # Invalid file length returns None
+    # Trailing newline or whitespace is stripped, returned, and re-saved cleanly
     target.write_bytes(raw_bytes + b"\n")
+    assert read_canonical_uuid_file(target) == valid_uuid
+    assert target.read_bytes() == raw_bytes
+
+    # Invalid UUID returns None
+    target.write_bytes(b"not-a-valid-uuid-content\n")
     assert read_canonical_uuid_file(target) is None
 
 

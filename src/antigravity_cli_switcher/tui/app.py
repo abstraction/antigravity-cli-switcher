@@ -72,20 +72,40 @@ class ACSApp(App[int]):
         self._last_account_switch_at = timestamp or utc_now().isoformat()
 
     def get_switch_cooldown_remaining(self) -> float:
-        """Return remaining stealth switch cooldown in seconds without disk I/O."""
-        from antigravity_cli_switcher.manager.stealth import calculate_cooldown_remaining_from_iso
-
-        if self._last_account_switch_at is not None:
-            return calculate_cooldown_remaining_from_iso(self._last_account_switch_at)
-
+        """Return remaining stealth switch cooldown in seconds including dynamic quiescence."""
         from antigravity_cli_switcher.manager.accounts import get_switch_cooldown_remaining
-        from antigravity_cli_switcher.manager.state import load_state
+        from antigravity_cli_switcher.manager.state import get_live_dir, load_state
+        from antigravity_cli_switcher.manager.stealth import (
+            calculate_cooldown_remaining_from_iso,
+            get_agy_quiescence_remaining,
+        )
 
+        state: dict[str, object] | None = None
         try:
             state = load_state(self.paths)
-            return get_switch_cooldown_remaining(state)
         except Exception:
-            return 0.0
+            pass
+
+        cooldown_rem = 0.0
+        if self._last_account_switch_at is not None:
+            cooldown_rem = calculate_cooldown_remaining_from_iso(self._last_account_switch_at)
+            if cooldown_rem <= 0.0:
+                self._last_account_switch_at = None
+        elif state is not None:
+            cooldown_rem = get_switch_cooldown_remaining(state)
+
+        quiescence_rem = 0.0
+        try:
+            live = get_live_dir(state) if state is not None else None
+            quiescence_rem = get_agy_quiescence_remaining(
+                state=state,
+                live_dir=live,
+                paths=self.paths,
+            )
+        except Exception:
+            pass
+
+        return max(cooldown_rem, quiescence_rem)
 
     def _tick_cooldown(self) -> None:
         rem = self.get_switch_cooldown_remaining()

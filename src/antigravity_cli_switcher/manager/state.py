@@ -15,6 +15,8 @@ from antigravity_cli_switcher.manager.paths import (
     ManagerPaths,
     default_live_dir,
     ensure_layout,
+    read_acs_id,
+    write_acs_id,
 )
 from antigravity_cli_switcher.manager.policy import (
     _normalize_quota_backend,
@@ -181,6 +183,7 @@ def _default_switch_runtime() -> dict[str, object]:
         "last_started_at": None,
         "last_completed_at": None,
         "last_account_switch_at": None,
+        "last_process_kill_at": None,
     }
 
 
@@ -202,6 +205,7 @@ def _normalize_switch_runtime(raw: object) -> dict[str, object]:
         "last_started_at",
         "last_completed_at",
         "last_account_switch_at",
+        "last_process_kill_at",
     ):
         value = runtime.get(key)
         runtime[key] = value if isinstance(value, str) or value is None else str(value)
@@ -221,6 +225,7 @@ def _mark_switch_runtime(
     started_at: str | None = None,
     completed_at: str | None = None,
     last_account_switch_at: str | None = None,
+    last_process_kill_at: str | None = None,
 ) -> None:
     runtime = _normalize_switch_runtime(state.get("switch_runtime"))
     runtime["status"] = status
@@ -236,6 +241,8 @@ def _mark_switch_runtime(
         runtime["last_completed_at"] = completed_at
     if last_account_switch_at is not None:
         runtime["last_account_switch_at"] = last_account_switch_at
+    if last_process_kill_at is not None:
+        runtime["last_process_kill_at"] = last_process_kill_at
     state["switch_runtime"] = runtime
 
 
@@ -296,11 +303,61 @@ def save_state(paths: ManagerPaths, state: dict) -> None:
 
 
 def sync_state_from_disk(paths: ManagerPaths, state: dict) -> dict:
-    disk_accounts = {p.name for p in paths.accounts_dir.iterdir() if p.is_dir()}
+    disk_accounts_map: dict[str, str] = {}
+    if paths.accounts_dir.is_dir():
+        for p in paths.accounts_dir.iterdir():
+            if not p.is_dir() or p.is_symlink():
+                continue
+            acs_id = read_acs_id(p)
+            if not acs_id:
+                existing_tracked_id = (
+                    state.get("accounts", {}).get(p.name, {}).get("id")
+                    if isinstance(state.get("accounts"), dict)
+                    else None
+                )
+                acs_id = write_acs_id(p, existing_tracked_id)
+            disk_accounts_map[p.name] = acs_id
+
+    disk_accounts = set(disk_accounts_map.keys())
     tracked = state["accounts"]
+
+    # Match by .acs_id for directories renamed externally
+    for new_name, acs_id in disk_accounts_map.items():
+        if new_name not in tracked:
+            for old_name, old_meta in list(tracked.items()):
+                if old_name not in disk_accounts and bool(acs_id) and old_meta.get("id") == acs_id:
+                    tracked[new_name] = tracked.pop(old_name)
+                    tracked[new_name]["id"] = acs_id
+                    if state.get("active") == old_name:
+                        state["active"] = new_name
+
+                    fleet_util = state.get("fleet_utilization")
+                    if isinstance(fleet_util, dict):
+                        fleet_accounts = fleet_util.get("accounts")
+                        if isinstance(fleet_accounts, dict) and old_name in fleet_accounts:
+                            fleet_accounts[new_name] = fleet_accounts.pop(old_name)
+                        if fleet_util.get("last_active_account") == old_name:
+                            fleet_util["last_active_account"] = new_name
+
+                    history = state.get("switch_history")
+                    if isinstance(history, list):
+                        for entry in history:
+                            if isinstance(entry, dict):
+                                for f in ("active", "previous_active", "switched_to", "from_account", "to_account"):
+                                    if entry.get(f) == old_name:
+                                        entry[f] = new_name
+
+                    runtime = state.get("switch_runtime")
+                    if isinstance(runtime, dict):
+                        if runtime.get("active") == old_name:
+                            runtime["active"] = new_name
+                        if runtime.get("previous_active") == old_name:
+                            runtime["previous_active"] = new_name
+                    break
 
     for name in sorted(disk_accounts):
         account_path = paths.accounts_dir / name
+        acs_id = disk_accounts_map[name]
         try:
             created_at = datetime.fromtimestamp(account_path.stat().st_mtime, timezone.utc).isoformat()
         except OSError:
@@ -308,6 +365,7 @@ def sync_state_from_disk(paths: ManagerPaths, state: dict) -> dict:
         tracked.setdefault(
             name,
             {
+                "id": acs_id,
                 "enabled": True,
                 "status": "standby",
                 "last_error": None,
@@ -328,6 +386,7 @@ def sync_state_from_disk(paths: ManagerPaths, state: dict) -> dict:
             },
         )
         meta = tracked[name]
+        meta["id"] = acs_id
         meta.setdefault("created_at", created_at)
         meta.setdefault("usage_windows", _default_usage_windows())
         meta.setdefault("health_status", "unknown")

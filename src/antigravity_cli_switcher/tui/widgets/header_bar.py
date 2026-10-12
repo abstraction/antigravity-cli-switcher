@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from math import ceil
+
 from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
@@ -96,7 +98,7 @@ class HeaderBar(Widget):
             candidates.append((self.switch_mode, mode_style))
 
         if self.cooldown_seconds > 0:
-            candidates.insert(0, (f"{int(self.cooldown_seconds)}s CD", "bold #ff6b6b"))
+            candidates.insert(0, (f"⏳ CD: {max(1, ceil(self.cooldown_seconds))}s", "bold #ffffff on #dc4c4c"))
 
         # Dynamically append tokens that fit comfortably within width
         current_len = text.cell_len

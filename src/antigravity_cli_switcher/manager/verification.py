@@ -119,7 +119,7 @@ def verify_account(
     elif st.get("active") == name:
         install_status = "MATCH" if live_cli_id == cli_install_id else "DESYNC"
     else:
-        install_status = "MATCH" if (live_cli_id and live_cli_id == cli_install_id) else "SAVED"
+        install_status = "COLLISION" if (live_cli_id and live_cli_id == cli_install_id) else "SAVED"
 
     if has_artifacts:
         try:
@@ -216,6 +216,10 @@ def verify_account(
         problem_status = ProblemStatus.QUOTA_CHECK_DUE
         recommended_action = "refresh"
         summary = "Cached live status is stale. Refresh recommended."
+
+    if install_status == "COLLISION" and problem_status == ProblemStatus.OK:
+        summary = "Installation ID collides with active live session. Run 'acs hygiene --fix' to isolate."
+        recommended_action = "hygiene_fix"
 
     return AccountVerification(
         problem_status=problem_status,

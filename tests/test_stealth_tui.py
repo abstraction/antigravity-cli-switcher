@@ -204,3 +204,75 @@ def test_app_in_memory_cooldown_ticks_without_disk_io(tmp_path: Path) -> None:
     with patch("antigravity_cli_switcher.manager.state.load_state", side_effect=AssertionError("Disk read called!")):
         rem = app.get_switch_cooldown_remaining()
         assert 50 < rem <= 60
+
+
+@pytest.mark.asyncio
+async def test_header_bar_prominent_cooldown_badge() -> None:
+    from textual.widgets import Static
+
+    from antigravity_cli_switcher.tui.widgets.header_bar import HeaderBar
+
+    hb = HeaderBar()
+
+    class HeaderBarApp(App[object]):
+        def compose(self) -> ComposeResult:
+            yield hb
+
+    app = HeaderBarApp()
+    async with app.run_test():
+        hb.active_account = "user_one"
+        hb.cooldown_seconds = 45.0
+        content = hb.query_one("#header-content", Static)
+        rendered = str(content.content)
+        assert "⏳ CD: 45s" in rendered
+
+
+@pytest.mark.asyncio
+async def test_dashboard_activate_same_account_bypasses_cooldown_modal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from antigravity_cli_switcher.manager.state import utc_now
+    from antigravity_cli_switcher.models import StatusSnapshot
+    from antigravity_cli_switcher.tui.app import ACSApp
+    from antigravity_cli_switcher.tui.screens.dashboard import DashboardScreen
+
+    paths = build_paths(tmp_path / "switcher")
+    ensure_layout(paths)
+    app = ACSApp(paths)
+
+    snapshot = StatusSnapshot(
+        root=str(paths.root),
+        runtime_dir=str(paths.runtime_dir),
+        lock_file=str(paths.lock_file),
+        active="active_user",
+        accounts={},
+    )
+    monkeypatch.setattr(
+        "antigravity_cli_switcher.tui.app.fetch_snapshot_data",
+        lambda p: (snapshot, None),
+    )
+
+    pushed_modals: list[object] = []
+    activated: list[str] = []
+
+    def mock_push(screen: object, callback: object = None) -> None:
+        pushed_modals.append(screen)
+
+    async with app.run_test() as pilot:
+        screen = pilot.app.screen
+        assert isinstance(screen, DashboardScreen)
+        screen.snapshot = snapshot
+
+        # Record recent switch so cooldown is active
+        app.record_account_switch(utc_now().isoformat())
+        assert app.get_switch_cooldown_remaining() > 0.0
+
+        monkeypatch.setattr(screen.app, "push_screen", mock_push)
+        monkeypatch.setattr(screen, "_run_activate_worker", lambda name, force=False: activated.append(name))
+
+        # Re-activate currently active account
+        screen.action_activate("active_user")
+
+        # Must NOT push StealthCooldownModal (bypassed for same account)
+        assert len(pushed_modals) == 0
+        assert activated == ["active_user"]

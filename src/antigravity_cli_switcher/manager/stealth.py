@@ -9,9 +9,13 @@ import time
 import uuid
 from pathlib import Path
 
-from antigravity_cli_switcher.manager.paths import ManagerPaths
+from antigravity_cli_switcher.manager.paths import (
+    ManagerPaths,
+    backup_file_with_rotation,
+)
 from antigravity_cli_switcher.manager.state import (
     _normalize_switch_runtime,
+    get_live_dir,
     parse_timestamp,
     utc_now,
 )
@@ -42,24 +46,43 @@ def is_valid_uuid_string(val: str) -> bool:
 
 
 def write_canonical_uuid_file(target: Path, raw_uuid: str | None = None) -> str:
-    """Write canonical 36-byte lowercase RFC 4122 UUID v4 with zero trailing newline."""
+    """Write canonical 36-byte lowercase RFC 4122 UUID v4 atomically with pre-mutation backup."""
     val = str(uuid.UUID(raw_uuid)).lower() if raw_uuid else str(uuid.uuid4()).lower()
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(val.encode("ascii"))
+    val_bytes = val.encode("ascii")
+
+    if target.is_file():
+        try:
+            if target.read_bytes() == val_bytes:
+                return val
+        except OSError:
+            pass
+        backup_file_with_rotation(target)
+
+    tmp_path = target.parent / f".tmp_{target.name}_{uuid.uuid4().hex}"
     try:
-        target.chmod(0o644)
-    except OSError:
-        pass
+        tmp_path.write_bytes(val_bytes)
+        try:
+            tmp_path.chmod(0o644)
+        except OSError:
+            pass
+        os.replace(tmp_path, target)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
     return val
 
 
 def read_canonical_uuid_file(target: Path) -> str | None:
-    """Read a 36-byte canonical UUID file or return None if missing/invalid."""
+    """Read a canonical UUID file, strip trailing whitespace/newlines, re-save if needed, or return None."""
     if not target.is_file():
         return None
     try:
         raw = target.read_bytes()
-        if len(raw) == 36 and is_valid_uuid_string(text := raw.decode("ascii").strip().lower()):
+        text = raw.decode("utf-8-sig", errors="replace").strip().lower()
+        if is_valid_uuid_string(text):
+            if raw != text.encode("ascii"):
+                write_canonical_uuid_file(target, text)
             return text
     except (OSError, UnicodeDecodeError):
         pass
@@ -68,10 +91,48 @@ def read_canonical_uuid_file(target: Path) -> str | None:
 
 def extract_jetski_uuid(content: str) -> str | None:
     """Extract installation_uuid from protobuf text content if present and valid."""
-    match = re.search(r'installation_uuid:\s*["\']([a-fA-F0-9-]+)["\']', content)
+    match = re.search(r'installation_uuid:\s*["\']?\s*([a-fA-F0-9-]{36})\s*["\']?', content)
     if match and is_valid_uuid_string(match.group(1)):
         return match.group(1).lower()
     return None
+
+
+def write_jetski_uuid_file(jetski_path: Path, raw_uuid: str | None = None) -> str:
+    """Write or update installation_uuid in jetski_state.pbtxt atomically with backup."""
+    val = str(uuid.UUID(raw_uuid)).lower() if raw_uuid else str(uuid.uuid4()).lower()
+    jetski_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if jetski_path.is_file():
+        try:
+            existing = jetski_path.read_text(encoding="utf-8")
+            if extract_jetski_uuid(existing) == val:
+                return val
+            if "installation_uuid:" in existing:
+                content = re.sub(
+                    r'installation_uuid:\s*["\']?[^"\'\r\n]*["\']?',
+                    f'installation_uuid:  "{val}"',
+                    existing,
+                )
+            else:
+                content = existing.rstrip() + f'\ninstallation_uuid:  "{val}"\n'
+        except OSError:
+            content = DEFAULT_JETSKI_TEMPLATE.format(uuid=val)
+        backup_file_with_rotation(jetski_path)
+    else:
+        content = DEFAULT_JETSKI_TEMPLATE.format(uuid=val)
+
+    tmp_path = jetski_path.parent / f".tmp_{jetski_path.name}_{uuid.uuid4().hex}"
+    try:
+        tmp_path.write_text(content, encoding="utf-8")
+        try:
+            tmp_path.chmod(0o644)
+        except OSError:
+            pass
+        os.replace(tmp_path, jetski_path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+    return val
 
 
 def ensure_account_identity_files(gemini_dir: Path) -> dict[str, str]:
@@ -94,27 +155,11 @@ def ensure_account_identity_files(gemini_dir: Path) -> dict[str, str]:
             if found:
                 jetski_uuid = found
             else:
-                jetski_uuid = str(uuid.uuid4()).lower()
-                if "installation_uuid:" in content:
-                    updated = re.sub(
-                        r'installation_uuid:\s*["\'][^"\']+["\']',
-                        f'installation_uuid:  "{jetski_uuid}"',
-                        content,
-                    )
-                else:
-                    updated = content.rstrip() + f'\ninstallation_uuid:  "{jetski_uuid}"\n'
-                jetski_path.write_text(updated, encoding="utf-8")
+                jetski_uuid = write_jetski_uuid_file(jetski_path)
         except OSError:
-            jetski_uuid = str(uuid.uuid4()).lower()
-            jetski_path.write_text(DEFAULT_JETSKI_TEMPLATE.format(uuid=jetski_uuid), encoding="utf-8")
+            jetski_uuid = write_jetski_uuid_file(jetski_path)
     else:
-        jetski_uuid = str(uuid.uuid4()).lower()
-        jetski_path.parent.mkdir(parents=True, exist_ok=True)
-        jetski_path.write_text(DEFAULT_JETSKI_TEMPLATE.format(uuid=jetski_uuid), encoding="utf-8")
-        try:
-            jetski_path.chmod(0o644)
-        except OSError:
-            pass
+        jetski_uuid = write_jetski_uuid_file(jetski_path)
 
     return {"installation_id": cli_id, "root_installation_id": root_id, "jetski_uuid": jetski_uuid}
 
@@ -247,3 +292,145 @@ def get_switch_cooldown_remaining(state: dict) -> float:
     runtime = _normalize_switch_runtime(state.get("switch_runtime"))
     raw = runtime.get("last_account_switch_at")
     return calculate_cooldown_remaining_from_iso(str(raw) if isinstance(raw, str) else None)
+
+
+def get_agy_quiescence_remaining(
+    state: dict[str, object] | None = None,
+    live_dir: Path | None = None,
+    paths: ManagerPaths | None = None,
+    now: float | None = None,
+    running_pids: list[int] | None = None,
+) -> float:
+    """Calculate remaining quiescence duration required before credentials can be safely committed.
+
+    Checks:
+    1. Active agy/antigravity processes (if running, full cooldown is required).
+    2. last_process_kill_at timestamp from switch_runtime.
+    3. Log and WAL artifact modification times in live ~/.gemini/antigravity-cli/
+       (cli.log, log/cli-*.log, conversation_summaries.db-wal, history.jsonl).
+
+    Returns 0.0 if agy has been inactive for >= STEALTH_SWITCH_COOLDOWN_SECONDS (60s).
+    """
+    current_epoch = now if now is not None else time.time()
+    max_remaining: float = 0.0
+
+    # 1. Check running processes
+    from antigravity_cli_switcher.manager.keyring import _is_test_environment
+
+    pids: list[int] = []
+    if running_pids is not None:
+        pids = running_pids
+    elif (
+        not _is_test_environment()
+        or os.getenv("ACS_TEST_REAL_PROCS") == "1"
+        or hasattr(get_external_agy_processes, "mock_calls")
+        or hasattr(get_external_agy_processes, "_mock_return_value")
+    ):
+        pids = get_external_agy_processes()
+
+    if pids:
+        return float(STEALTH_SWITCH_COOLDOWN_SECONDS)
+
+    # 2. Check last_process_kill_at
+    if state is not None:
+        runtime = _normalize_switch_runtime(state.get("switch_runtime"))
+        kill_raw = runtime.get("last_process_kill_at")
+        if isinstance(kill_raw, str) and kill_raw.strip():
+            kill_dt = parse_timestamp(kill_raw)
+            if kill_dt:
+                elapsed_kill = max(0.0, current_epoch - kill_dt.timestamp())
+                rem_kill = min(
+                    float(STEALTH_SWITCH_COOLDOWN_SECONDS),
+                    max(0.0, float(STEALTH_SWITCH_COOLDOWN_SECONDS) - elapsed_kill),
+                )
+                max_remaining = max(max_remaining, rem_kill)
+
+    # 3. Check live directory artifacts
+    resolved_live = live_dir
+    if resolved_live is None and state is not None:
+        resolved_live = get_live_dir(state)
+    if resolved_live is None and paths is not None:
+        from antigravity_cli_switcher.manager.paths import default_live_dir
+
+        resolved_live = default_live_dir(paths.root)
+    if resolved_live is None and (not _is_test_environment() or os.getenv("ACS_TEST_REAL_GEMINI") == "1"):
+        from antigravity_cli_switcher.manager.paths import default_live_dir
+
+        resolved_live = default_live_dir()
+
+    if resolved_live and resolved_live.exists():
+        agy_dirs = [resolved_live / "antigravity-cli", resolved_live]
+        latest_mtime: float = 0.0
+        for adir in agy_dirs:
+            if not adir.is_dir():
+                continue
+            cli_log = adir / "cli.log"
+            if cli_log.is_file():
+                try:
+                    latest_mtime = max(latest_mtime, cli_log.stat().st_mtime)
+                except OSError:
+                    pass
+            log_sub = adir / "log"
+            if log_sub.is_dir():
+                try:
+                    for p in log_sub.glob("cli-*.log"):
+                        if p.is_file():
+                            latest_mtime = max(latest_mtime, p.stat().st_mtime)
+                except OSError:
+                    pass
+            db = adir / "conversation_summaries.db"
+            if db.is_file():
+                try:
+                    latest_mtime = max(latest_mtime, db.stat().st_mtime)
+                except OSError:
+                    pass
+            wal = adir / "conversation_summaries.db-wal"
+            if wal.is_file():
+                try:
+                    latest_mtime = max(latest_mtime, wal.stat().st_mtime)
+                except OSError:
+                    pass
+            hist = adir / "history.jsonl"
+            if hist.is_file():
+                try:
+                    latest_mtime = max(latest_mtime, hist.stat().st_mtime)
+                except OSError:
+                    pass
+            jetbox_pb = adir / "jetbox_summaries_proto.pb"
+            if jetbox_pb.is_file():
+                try:
+                    latest_mtime = max(latest_mtime, jetbox_pb.stat().st_mtime)
+                except OSError:
+                    pass
+            brain_dir = adir / "brain"
+            if brain_dir.is_dir():
+                try:
+                    latest_mtime = max(latest_mtime, brain_dir.stat().st_mtime)
+                    for bp in brain_dir.rglob("*"):
+                        try:
+                            latest_mtime = max(latest_mtime, bp.stat().st_mtime)
+                        except OSError:
+                            pass
+                except OSError:
+                    pass
+            worktrees_dir = adir / "worktrees"
+            if worktrees_dir.is_dir():
+                try:
+                    latest_mtime = max(latest_mtime, worktrees_dir.stat().st_mtime)
+                    for wp in worktrees_dir.rglob("*"):
+                        try:
+                            latest_mtime = max(latest_mtime, wp.stat().st_mtime)
+                        except OSError:
+                            pass
+                except OSError:
+                    pass
+
+        if latest_mtime > 0.0:
+            elapsed_artifact = max(0.0, current_epoch - latest_mtime)
+            rem_artifact = min(
+                float(STEALTH_SWITCH_COOLDOWN_SECONDS),
+                max(0.0, float(STEALTH_SWITCH_COOLDOWN_SECONDS) - elapsed_artifact),
+            )
+            max_remaining = max(max_remaining, rem_artifact)
+
+    return max_remaining

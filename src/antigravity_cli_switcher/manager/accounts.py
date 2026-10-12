@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import timedelta
+from math import ceil
 from pathlib import Path
 
 from antigravity_cli_switcher.log import get_logger
@@ -63,6 +64,8 @@ from antigravity_cli_switcher.manager.state import (
 )
 from antigravity_cli_switcher.manager.stealth import (
     STEALTH_SWITCH_COOLDOWN_SECONDS,
+    ensure_account_identity_files,
+    get_agy_quiescence_remaining,
     get_switch_cooldown_remaining,
 )
 from antigravity_cli_switcher.manager.verification import (
@@ -77,9 +80,11 @@ def _copy_active_runtime(paths: ManagerPaths, name: str) -> None:
     src = account_dir(paths, name)
     if not src.exists():
         raise ValueError(f"Account not found: {name}")
-    if not profile_has_login_artifacts(_resolve_profile_source(src)):
+    profile_src = _resolve_profile_source(src)
+    if not profile_has_login_artifacts(profile_src):
         raise ValueError(f"Account {name} is missing required auth files")
 
+    ensure_account_identity_files(profile_src)
     paths.runtime_dir.mkdir(parents=True, exist_ok=True)
     _copy_account_profile(src, paths.runtime_dir)
 
@@ -112,13 +117,24 @@ def switch_account(paths: ManagerPaths, name: str, *, force: bool = False) -> st
             )
         is_same_account = state.get("active") == resolved_name
         should_enforce_cooldown = not _is_test_environment() or bool(os.getenv("ACS_ENFORCE_COOLDOWN"))
-        if not is_same_account and not force and should_enforce_cooldown:
-            cooldown_rem = get_switch_cooldown_remaining(state)
-            if cooldown_rem > 0:
-                raise RuntimeError(
-                    f"Stealth cooldown active: {int(cooldown_rem)}s remaining before next switch allowed. Use --force to bypass."
+        if not is_same_account:
+            if not force and should_enforce_cooldown:
+                cooldown_rem = get_switch_cooldown_remaining(state)
+                quiescence_rem = get_agy_quiescence_remaining(
+                    state=state, live_dir=get_live_dir(state), paths=paths, running_pids=[]
                 )
-        _ensure_safe_account_switch()
+                effective_rem = max(cooldown_rem, quiescence_rem)
+                if effective_rem > 0:
+                    rem_int = max(1, ceil(effective_rem))
+                    raise RuntimeError(
+                        f"Stealth cooldown active: {rem_int}s remaining before next switch allowed. Use --force to bypass."
+                    )
+            terminated = _ensure_safe_account_switch()
+            if terminated:
+                runtime = _normalize_switch_runtime(state.get("switch_runtime"))
+                runtime["last_process_kill_at"] = utc_now().isoformat()
+                state["switch_runtime"] = runtime
+                save_state(paths, state)
         previous = state.get("active")
         _copy_active_runtime(paths, resolved_name)
         state["active"] = resolved_name
@@ -154,11 +170,21 @@ def switch_next(paths: ManagerPaths, *, force: bool = False) -> str:
         should_enforce_cooldown = not _is_test_environment() or bool(os.getenv("ACS_ENFORCE_COOLDOWN"))
         if not force and should_enforce_cooldown:
             cooldown_rem = get_switch_cooldown_remaining(state)
-            if cooldown_rem > 0:
+            quiescence_rem = get_agy_quiescence_remaining(
+                state=state, live_dir=get_live_dir(state), paths=paths, running_pids=[]
+            )
+            effective_rem = max(cooldown_rem, quiescence_rem)
+            if effective_rem > 0:
+                rem_int = max(1, ceil(effective_rem))
                 raise RuntimeError(
-                    f"Stealth cooldown active: {int(cooldown_rem)}s remaining before next switch allowed. Use --force to bypass."
+                    f"Stealth cooldown active: {rem_int}s remaining before next switch allowed. Use --force to bypass."
                 )
-        _ensure_safe_account_switch()
+        terminated = _ensure_safe_account_switch()
+        if terminated:
+            runtime = _normalize_switch_runtime(state.get("switch_runtime"))
+            runtime["last_process_kill_at"] = utc_now().isoformat()
+            state["switch_runtime"] = runtime
+            save_state(paths, state)
         _copy_active_runtime(paths, target)
         state["active"] = target
         state = sync_state_from_disk(paths, state)

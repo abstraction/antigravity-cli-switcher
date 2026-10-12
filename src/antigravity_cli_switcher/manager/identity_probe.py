@@ -8,20 +8,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from antigravity_cli_switcher.manager.keyring import (
-    _clear_keyring_token,
-    _load_keyring_token,
-    _save_keyring_token,
-    _sync_home_to_keyring,
-    _sync_keyring_to_home,
-)
+from antigravity_cli_switcher.manager.keyring import _isolated_keyring_warmup
 from antigravity_cli_switcher.manager.paths import (
     LOGIN_ARTIFACT_SETS,
     _copy_account_profile,
     _resolve_home_source,
     _resolve_profile_source,
     resolve_agy_binary,
-    resolve_runtime_home,
 )
 
 EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
@@ -49,24 +42,19 @@ def probe_profile_identity_via_usage(
     profile_source = _resolve_profile_source(source_dir)
     if not profile_has_login_artifacts(profile_source):
         raise ValueError(f"Profile source is missing required auth files: {profile_source}")
-    runtime_home = resolve_runtime_home(live_dir)
 
-    with tempfile.TemporaryDirectory(prefix="agy-usage-restore-") as restore_root_str:
-        restore_root = Path(restore_root_str)
-        restore_home = restore_root / "home"
-        _copy_account_profile(runtime_home, restore_home)
-        restore_keyring = _load_keyring_token()
-        try:
-            _copy_account_profile(source_home, runtime_home)
-            _sync_home_to_keyring(source_home)
+    with tempfile.TemporaryDirectory(prefix="agy-usage-probe-") as temp_dir:
+        probe_home = Path(temp_dir)
+        _copy_account_profile(source_home, probe_home)
 
+        with _isolated_keyring_warmup(probe_home):
             env = os.environ.copy()
-            env["HOME"] = str(runtime_home)
+            env["HOME"] = str(probe_home)
             env["PATH"] = env.get("PATH", "/bin:/usr/bin:/usr/local/bin")
 
             proc = subprocess.run(
                 [resolved_binary, "-p", "/usage"],
-                cwd=runtime_home,
+                cwd=probe_home,
                 env=env,
                 capture_output=True,
                 text=True,
@@ -78,7 +66,6 @@ def probe_profile_identity_via_usage(
                 tail = "\n".join(output.splitlines()[-8:]) if output else "no output"
                 raise ValueError(f"agy /usage failed with exit code {proc.returncode}: {tail}")
 
-            _sync_keyring_to_home(source_home)
             match = EMAIL_PATTERN.search(output)
             if match:
                 return {
@@ -90,12 +77,6 @@ def probe_profile_identity_via_usage(
                 "source": "agy:/usage",
                 "raw_hint": "\n".join(output.splitlines()[:8]),
             }
-        finally:
-            _copy_account_profile(restore_home, runtime_home)
-            if restore_keyring:
-                _save_keyring_token(restore_keyring)
-            else:
-                _clear_keyring_token()
 
 
 def resolve_login_profile_identity(

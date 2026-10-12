@@ -183,7 +183,7 @@ class DetailPanel(Widget):
         status_style = (
             "bold #77ca9b"
             if id_status == "MATCH"
-            else ("bold #dc4c4c" if id_status in ("DESYNC", "MISSING") else "dim cyan")
+            else ("bold #dc4c4c" if id_status in ("DESYNC", "MISSING", "COLLISION") else "dim cyan")
         )
 
         install_text = Text()
@@ -198,7 +198,9 @@ class DetailPanel(Widget):
 
         cd_text = Text()
         if cooldown_remaining > 0:
-            cd_text.append(f"{int(cooldown_remaining)}s remaining (hold)", style="bold #e06c75")
+            rem_val = int(cooldown_remaining) if cooldown_remaining >= 1.0 else 1
+            rem_str = f"{rem_val}s remaining (lockout active)"
+            cd_text.append(rem_str, style="bold #e06c75")
         else:
             cd_text.append("Ready", style="bold #77ca9b")
 
