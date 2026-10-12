@@ -15,6 +15,7 @@ MANAGED_PROFILE_FILES = (
     "antigravity-cli/jetski_state.pbtxt",
     "antigravity-cli/cache/default_project_id.txt",
     "antigravity-cli/cache/projects.json",
+    "antigravity-cli/conversation_summaries.db",
 )
 LOGIN_ARTIFACT_SETS = (("antigravity-cli/antigravity-oauth-token",),)
 
@@ -277,6 +278,30 @@ def write_acs_id(acc_dir: Path, acs_id: str | None = None) -> str:
     return val
 
 
+def _checkpoint_sqlite_wal(db_path: Path) -> None:
+    """Checkpoint and truncate SQLite WAL file to ensure pristine state before copy."""
+    try:
+        import sqlite3
+
+        con = sqlite3.connect(str(db_path), timeout=2.0)
+        try:
+            con.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        finally:
+            con.close()
+    except Exception:
+        try:
+            import subprocess
+
+            subprocess.run(
+                ["sqlite3", str(db_path), "PRAGMA wal_checkpoint(TRUNCATE);"],
+                capture_output=True,
+                check=False,
+                timeout=2,
+            )
+        except Exception:
+            pass
+
+
 def _copy_managed_profile_files(source: Path, target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     for name in MANAGED_PROFILE_FILES:
@@ -284,6 +309,16 @@ def _copy_managed_profile_files(source: Path, target: Path) -> None:
         dst = target / name
         dst.parent.mkdir(parents=True, exist_ok=True)
         if src.is_file():
+            if src.name.endswith(".db"):
+                _checkpoint_sqlite_wal(src)
+                src_wal = src.with_name(f"{src.name}-wal")
+                dst_wal = dst.with_name(f"{dst.name}-wal")
+                dst_shm = dst.with_name(f"{dst.name}-shm")
+                dst_shm.unlink(missing_ok=True)
+                if src_wal.is_file() and src_wal.stat().st_size > 0:
+                    shutil.copy2(src_wal, dst_wal)
+                else:
+                    dst_wal.unlink(missing_ok=True)
             if dst.name in ("installation_id", "jetski_state.pbtxt") and dst.is_file() and dst.stat().st_size > 0:
                 try:
                     if dst.read_bytes() != src.read_bytes():
@@ -298,6 +333,9 @@ def _copy_managed_profile_files(source: Path, target: Path) -> None:
                     pass
         else:
             dst.unlink(missing_ok=True)
+            if dst.name.endswith(".db"):
+                dst.with_name(f"{dst.name}-wal").unlink(missing_ok=True)
+                dst.with_name(f"{dst.name}-shm").unlink(missing_ok=True)
 
 
 def _remove_managed_profile_files(target: Path) -> None:
@@ -306,6 +344,9 @@ def _remove_managed_profile_files(target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     for name in MANAGED_PROFILE_FILES:
         (target / name).unlink(missing_ok=True)
+        if name.endswith(".db"):
+            (target / f"{name}-wal").unlink(missing_ok=True)
+            (target / f"{name}-shm").unlink(missing_ok=True)
 
     for cache_name in ("cache/default_project_id.txt", "cache/projects.json"):
         (target / cache_name).unlink(missing_ok=True)

@@ -47,6 +47,16 @@ class DetailPanel(Widget):
         yield Static("Overview", id="detail-title")
         yield Static(id="detail-content")
 
+    def on_mount(self) -> None:
+        if self._last_name and self._last_meta:
+            self.update_detail(
+                self._last_name,
+                self._last_meta,
+                self._last_ver,
+                self._last_util,
+                self._last_cooldown_remaining,
+            )
+
     def on_resize(self, event: events.Resize) -> None:
         if self._last_name and self._last_meta:
             self.update_detail(
@@ -106,6 +116,9 @@ class DetailPanel(Widget):
         self._last_ver = verification
         self._last_util = utilization
         self._last_cooldown_remaining = cooldown_remaining
+
+        if not self.is_mounted:
+            return
 
         title_static = self.query_one("#detail-title", Static)
         content_static = self.query_one("#detail-content", Static)

@@ -8,12 +8,12 @@ import pytest
 
 from antigravity_cli_switcher.manager.accounts import switch_account
 from antigravity_cli_switcher.manager.failover import rotate_after_failure_locked
-from antigravity_cli_switcher.manager.paths import build_paths, ensure_layout
+from antigravity_cli_switcher.manager.paths import ManagerPaths, build_paths, ensure_layout
 from antigravity_cli_switcher.manager.profiles import save_account_profile
 from antigravity_cli_switcher.manager.state import load_state, save_state
 
 
-def _setup_accounts(tmp_path: Path) -> tuple[object, Path, Path]:
+def _setup_accounts(tmp_path: Path) -> tuple[ManagerPaths, Path, Path]:
     paths = build_paths(tmp_path / "switcher")
     ensure_layout(paths)
 
