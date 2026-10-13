@@ -244,12 +244,11 @@ class TestModelsCatalogDualFormat(unittest.TestCase):
         else:
             mock_req = mock.MagicMock(return_value=cloudcode_resp or {})
 
+        state_mock = {"accounts": {"acc_alpha": {"project_id": project_id}}}
         with (
             mock.patch("antigravity_cli_switcher.manager.models_catalog.manager_lock"),
-            mock.patch(
-                "antigravity_cli_switcher.manager.models_catalog.sync_state_from_disk", return_value=mock.MagicMock()
-            ),
-            mock.patch("antigravity_cli_switcher.manager.models_catalog.load_state"),
+            mock.patch("antigravity_cli_switcher.manager.models_catalog.sync_state_from_disk", return_value=state_mock),
+            mock.patch("antigravity_cli_switcher.manager.models_catalog.load_state", return_value=state_mock),
             mock.patch(
                 "antigravity_cli_switcher.manager.quota._resolve_usage_refresh_target",
                 return_value=("acc_alpha", Path("/tmp/synthetic_root/accounts/acc_alpha")),
@@ -262,9 +261,7 @@ class TestModelsCatalogDualFormat(unittest.TestCase):
                 "antigravity_cli_switcher.manager.quota._ensure_fresh_access_token",
                 return_value="synthetic_access_token",
             ),
-            mock.patch("antigravity_cli_switcher.manager.models_catalog._extract_project_id", return_value=project_id),
             mock.patch("antigravity_cli_switcher.manager.models_catalog._cloudcode_request", mock_req),
-            mock.patch("antigravity_cli_switcher.manager.models_catalog._isolated_keyring_warmup"),
             mock.patch("antigravity_cli_switcher.manager.models_catalog._run_agy_models_command", mock_run_agy),
         ):
             result = list_models(paths, name="acc_alpha")
@@ -291,18 +288,20 @@ class TestModelsCatalogDualFormat(unittest.TestCase):
             cloudcode_resp={"models": {}}, project_id=None, fallback_models=fallback
         )
         mock_req.assert_called_once_with("synthetic_access_token", CODE_ASSIST_MODELS_PATH, {})
-        mock_agy.assert_called_once()
-        self.assertEqual(result["count"], 1)
-        self.assertEqual(result["models"], fallback)
+        # Under INV-05, dynamic agy models fallback must NEVER be executed
+        mock_agy.assert_not_called()
+        self.assertEqual(result["count"], 0)
+        self.assertEqual(result["models"], [])
 
     def test_list_models_fallback_on_api_error(self) -> None:
         fallback = [{"name": "fallback-model", "provider": "fallback", "family": None, "variant": None}]
         result, _, mock_agy = self._run_list_models_with_mocks(
             cloudcode_err=ValueError("connection refused"), fallback_models=fallback
         )
-        mock_agy.assert_called_once()
-        self.assertEqual(result["count"], 1)
-        self.assertEqual(result["models"], fallback)
+        # Under INV-05, dynamic agy models fallback must NEVER be executed
+        mock_agy.assert_not_called()
+        self.assertEqual(result["count"], 0)
+        self.assertEqual(result["models"], [])
 
     def test_list_models_connectrpc_wrapped_response(self) -> None:
         wrapped_resp = {

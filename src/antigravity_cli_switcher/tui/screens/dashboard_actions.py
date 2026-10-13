@@ -67,8 +67,18 @@ class DashboardActionsScreenBase(Screen[None]):
             self._set_status("No account selected.")
             return
 
+        current_active = self.snapshot.active if self.snapshot else None
+        if current_active is None:
+            try:
+                from antigravity_cli_switcher.manager.state import load_state
+
+                current_active = load_state(self.acs_app.paths).get("active")
+            except Exception:
+                pass
+
+        is_same_account = current_active == name
         cooldown = self.acs_app.get_switch_cooldown_remaining()
-        if cooldown > 0:
+        if not is_same_account and cooldown > 0:
 
             def on_cooldown_result(result: str | None) -> None:
                 if result in ("switch", "force"):
@@ -93,7 +103,8 @@ class DashboardActionsScreenBase(Screen[None]):
             if self.snapshot and name in self.snapshot.accounts and not self.snapshot.accounts[name].enabled:
                 set_enabled(self.acs_app.paths, name, True)
 
-            terminated = _ensure_safe_account_switch()
+            current_active = self.snapshot.active if self.snapshot else None
+            is_same = current_active == name
             try:
                 if force:
                     dash_mod.switch_account(self.acs_app.paths, name, force=True)
@@ -101,13 +112,15 @@ class DashboardActionsScreenBase(Screen[None]):
                     dash_mod.switch_account(self.acs_app.paths, name)
             except TypeError:
                 dash_mod.switch_account(self.acs_app.paths, name)
-            self.acs_app.record_account_switch()
-            if terminated:
-                pids_str = ", ".join(str(p) for p in terminated)
-                msg = f"Activated {name}. ⚠️ [STEALTH] Terminated external CLI session (PID: {pids_str}) to purge session header."
-            else:
-                msg = f"Activated {name}."
-            self.app.call_from_thread(self._set_status, msg)
+            if not is_same:
+                self.acs_app.record_account_switch()
+                try:
+                    from antigravity_cli_switcher.manager.notify import notify_account_armed
+
+                    notify_account_armed(name)
+                except Exception:
+                    pass
+            self.app.call_from_thread(self._set_status, f"Activated {name}.")
             self.acs_app.refresh_snapshot()
         except Exception as exc:
             self.app.call_from_thread(self._set_status, f"Activation failed: {exc}")
@@ -134,7 +147,6 @@ class DashboardActionsScreenBase(Screen[None]):
     def _run_switch_next_worker(self, *, force: bool = False) -> None:
         self.app.call_from_thread(self._set_status, "Switching to next account...")
         try:
-            terminated = _ensure_safe_account_switch()
             try:
                 if force:
                     next_name = switch_next(self.acs_app.paths, force=True)
@@ -143,12 +155,13 @@ class DashboardActionsScreenBase(Screen[None]):
             except TypeError:
                 next_name = switch_next(self.acs_app.paths)
             self.acs_app.record_account_switch()
-            if terminated:
-                pids_str = ", ".join(str(p) for p in terminated)
-                msg = f"Switched to {next_name}. ⚠️ [STEALTH] Terminated external CLI session (PID: {pids_str}) to purge session header."
-            else:
-                msg = f"Switched to {next_name}."
-            self.app.call_from_thread(self._set_status, msg)
+            try:
+                from antigravity_cli_switcher.manager.notify import notify_account_armed
+
+                notify_account_armed(next_name)
+            except Exception:
+                pass
+            self.app.call_from_thread(self._set_status, f"Switched to {next_name}.")
             self.acs_app.refresh_snapshot()
         except Exception as exc:
             self.app.call_from_thread(self._set_status, f"Switch failed: {exc}")

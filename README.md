@@ -8,7 +8,7 @@
   </p>
   <p>Active-standby account manager and quota failover switcher for Antigravity CLI on Linux</p>
   <p>
-    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-327%20passed-2ea043" alt="Tests"></a>
+    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-388%20passed-2ea043" alt="Tests"></a>
     <img src="https://img.shields.io/badge/agy-v1.3.3-4285f4" alt="agy version">
     <a href="https://github.com/abstraction/antigravity-cli-switcher"><img src="https://img.shields.io/badge/python-3.10+-3776ab" alt="Python"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
@@ -413,6 +413,7 @@ The migration utility creates a timestamped backup archive of the legacy directo
 | `acs whoami [name]` | Show authenticated Google email and token identity |
 | `acs models [name]` | List available models for an account |
 | `acs login <name>` | Launch interactive browser login into an isolated profile |
+| `acs relogin <name>` | Re-authenticate an existing account while preserving its Install ID and identity |
 | `acs import-current <name>` | Import active profile from `~/.gemini` into manager storage |
 | `acs add <name>` | Add an account profile by copying an existing directory |
 | `acs switch <name>` | Switch the active account profile |

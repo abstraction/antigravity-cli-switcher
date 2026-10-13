@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -20,9 +21,11 @@ from antigravity_cli_switcher.manager.locking import manager_lock
 from antigravity_cli_switcher.manager.paths import (
     ManagerPaths,
     _remove_managed_profile_files,
+    _resolve_profile_source,
     account_dir,
     default_live_dir,
     resolve_agy_binary,
+    resolve_runtime_home,
 )
 from antigravity_cli_switcher.manager.state import (
     get_live_dir,
@@ -30,6 +33,7 @@ from antigravity_cli_switcher.manager.state import (
     save_state,
     sync_state_from_disk,
 )
+from antigravity_cli_switcher.manager.stealth import ensure_account_identity_files
 
 
 def _get_running_agy_processes() -> list[tuple[int, str]]:
@@ -40,7 +44,7 @@ def _get_running_agy_processes() -> list[tuple[int, str]]:
 
 
 def _ensure_safe_account_switch() -> list[int]:
-    if _is_test_environment():
+    if _is_test_environment() and os.getenv("ACS_TEST_REAL_PROCS") != "1":
         return []
     from antigravity_cli_switcher.manager.stealth import terminate_external_agy_processes
 
@@ -79,15 +83,35 @@ def login_account(
         live_dir = get_live_dir(state) or default_live_dir(paths.root)
         state["live_dir"] = str(live_dir.resolve())
         save_state(paths, state)
+        resolved_name = resolve_account_name(state, name)
+        storage_name = normalize_account_storage_name(resolved_name)
 
     try:
-        runtime_home = live_dir.parent
+        runtime_home = resolve_runtime_home(live_dir)
         runtime_home.mkdir(parents=True, exist_ok=True)
-        _remove_managed_profile_files(live_dir)
-
         env = os.environ.copy()
+        env["HOME"] = str(runtime_home)
 
         with _isolated_keyring_warmup(runtime_home):
+            _remove_managed_profile_files(live_dir)
+
+            # If relogging into an existing account, pre-seed its established identity
+            # files into live_dir so agy reuses them instead of generating a new Install ID.
+            target = account_dir(paths, storage_name)
+            if target.is_dir():
+                target_profile = _resolve_profile_source(target)
+                ensure_account_identity_files(target_profile)
+                for ident_file in (
+                    "antigravity-cli/installation_id",
+                    "installation_id",
+                    "antigravity-cli/jetski_state.pbtxt",
+                ):
+                    src = target_profile / ident_file
+                    if src.is_file():
+                        dst = live_dir / ident_file
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(src, dst)
+
             print("\n" + "=" * 54)
             print(" Antigravity CLI Switcher (acs) - Login Session")
             print(f" Target Account: {name}")

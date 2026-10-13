@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime import timedelta
+from math import ceil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,7 @@ from antigravity_cli_switcher.manager.state import (
     _mark_switch_runtime,
     _normalize_switch_runtime,
     _normalize_usage_family,
+    get_live_dir,
     load_state,
     parse_timestamp,
     save_state,
@@ -260,27 +262,46 @@ def rotate_after_failure_locked(
 
     switched_to = None
     from antigravity_cli_switcher.manager.keyring import _is_test_environment
-    from antigravity_cli_switcher.manager.stealth import get_switch_cooldown_remaining
+    from antigravity_cli_switcher.manager.stealth import (
+        get_agy_quiescence_remaining,
+        get_switch_cooldown_remaining,
+    )
 
     should_enforce_cooldown = not _is_test_environment() or bool(os.getenv("ACS_ENFORCE_COOLDOWN"))
     cooldown_rem = get_switch_cooldown_remaining(state)
+    # running_pids=[]: failover evaluates quiescence from artifact mtimes / kill record;
+    # active processes are terminated immediately upon candidate selection.
+    quiescence_rem = get_agy_quiescence_remaining(
+        state=state, live_dir=get_live_dir(state), paths=paths, running_pids=[]
+    )
+    effective_cooldown = max(cooldown_rem, quiescence_rem)
     cooldown_blocked = False
 
     if force_switch or switch_mode == "auto":
-        if not force_switch and should_enforce_cooldown and cooldown_rem > 0:
+        if not force_switch and should_enforce_cooldown and effective_cooldown > 0:
             cooldown_blocked = True
-            logger.warning(f"Automated failover switch blocked by stealth cooldown: {int(cooldown_rem)}s remaining")
+            rem_int = max(1, ceil(effective_cooldown))
+            logger.warning(f"Automated failover switch blocked by stealth cooldown: {rem_int}s remaining")
         else:
             switched_to = _best_switch_candidate(paths, state, exclude=previous, required_family=family)
             if switched_to:
                 from antigravity_cli_switcher.manager.login import _ensure_safe_account_switch
 
-                _ensure_safe_account_switch()
+                terminated = _ensure_safe_account_switch()
+                if terminated:
+                    runtime["last_process_kill_at"] = utc_now().isoformat()
                 _copy_active_runtime(paths, switched_to)
                 state["active"] = switched_to
                 state = sync_state_from_disk(paths, state)
                 _sync_runtime_to_live_dir(paths, state)
+                try:
+                    from antigravity_cli_switcher.manager.notify import notify_account_armed
 
+                    notify_account_armed(switched_to)
+                except Exception:
+                    pass
+
+    kill_at = runtime.get("last_process_kill_at")
     _mark_switch_runtime(
         state,
         status="ready" if state.get("active") else "no_account",
@@ -292,6 +313,7 @@ def rotate_after_failure_locked(
         previous_active=previous,
         completed_at=utc_now().isoformat(),
         last_account_switch_at=now_iso if switched_to else None,
+        last_process_kill_at=str(kill_at) if kill_at else None,
     )
     if state.get("active"):
         outcome = "switched"

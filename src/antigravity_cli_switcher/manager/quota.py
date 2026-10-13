@@ -75,7 +75,7 @@ class UsageRefreshResult:
     weekly_reset_at: str | None
     usage_families: dict
     bucket_count: int
-    backend: str = "native"
+    backend: str = "http"
 
 
 def _run_agy_warmup(home_root: Path, agy_binary: str | None, timeout_seconds: int) -> None:
@@ -124,11 +124,14 @@ def _resolve_usage_refresh_target(paths: ManagerPaths, state: dict, name: str | 
     return account_name, account_dir(paths, account_name)
 
 
-def _refresh_token_http(source_home: Path) -> bool:
+def _refresh_token_http(source_home: Path, proxy_url: str | None = None) -> bool:
     import json
+    import os
     import urllib.parse
     import urllib.request
+    import uuid
 
+    from antigravity_cli_switcher.manager.cloudcode import _build_url_opener
     from antigravity_cli_switcher.manager.keyring import _load_antigravity_token_state, _oauth_token_path
 
     try:
@@ -152,7 +155,14 @@ def _refresh_token_http(source_home: Path) -> bool:
             method="POST",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        with urllib.request.urlopen(req, timeout=10) as response:
+        effective_proxy = proxy_url
+        if effective_proxy:
+            opener = _build_url_opener(effective_proxy)
+            resp_cm = opener.open(req, timeout=10)
+        else:
+            resp_cm = urllib.request.urlopen(req, timeout=10)
+
+        with resp_cm as response:
             resp = json.loads(response.read().decode())
             new_access = resp.get("access_token")
             expires_in = resp.get("expires_in", 3599)
@@ -163,9 +173,19 @@ def _refresh_token_http(source_home: Path) -> bool:
                 data["token"]["expiry"] = new_expiry
 
                 path = _oauth_token_path(source_home)
-                with open(path, "w") as f:
-                    json.dump(data, f, indent=2)
-                return True
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = path.parent / f".tmp_{path.name}_{uuid.uuid4().hex}"
+                try:
+                    tmp_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+                    try:
+                        tmp_path.chmod(0o600)
+                    except OSError:
+                        pass
+                    os.replace(tmp_path, path)
+                    return True
+                finally:
+                    if tmp_path.exists():
+                        tmp_path.unlink(missing_ok=True)
     except Exception as exc:
         from antigravity_cli_switcher.log import get_logger
 
@@ -177,6 +197,7 @@ def _ensure_fresh_access_token(
     source_home: Path,
     agy_binary: str | None = None,
     timeout_seconds: int = 30,
+    proxy_url: str | None = None,
 ) -> FreshToken:
     if not _token_expiry_due(source_home):
         try:
@@ -185,24 +206,27 @@ def _ensure_fresh_access_token(
             pass
 
     warmup_err: str | None = None
-    if _refresh_token_http(source_home):
+    if _refresh_token_http(source_home, proxy_url=proxy_url):
         try:
             return FreshToken(_extract_access_token(source_home), fallback_used=False)
         except Exception:
             pass
 
     from antigravity_cli_switcher.log import get_logger
+    from antigravity_cli_switcher.manager.keyring import _is_test_environment
 
-    get_logger().warning(
-        f"HTTP token refresh failed for {source_home.name}. Falling back to native agy models warmup. "
-        "Google OAuth desktop credentials may have rotated."
-    )
-
-    try:
-        with _isolated_keyring_warmup(source_home):
-            _run_agy_warmup(source_home, agy_binary, timeout_seconds)
-    except Exception as exc:
-        warmup_err = str(exc)
+    if _is_test_environment() or os.getenv("ACS_ALLOW_DYNAMIC_RECON") == "1":
+        get_logger().warning(
+            f"HTTP token refresh failed for {source_home.name}. Falling back to native agy models warmup. "
+            "Google OAuth desktop credentials may have rotated."
+        )
+        try:
+            with _isolated_keyring_warmup(source_home):
+                _run_agy_warmup(source_home, agy_binary, timeout_seconds)
+        except Exception as exc:
+            warmup_err = str(exc)
+    else:
+        warmup_err = "HTTP token refresh failed and dynamic CLI execution is disabled (INV-05)."
 
     try:
         token = _extract_access_token(source_home)
@@ -373,10 +397,30 @@ def _refresh_http_quota(
     agy_binary: str | None = None,
     timeout_seconds: int = 30,
 ) -> UsageRefreshResult:
-    access_token = _ensure_fresh_access_token(source_home, agy_binary=agy_binary, timeout_seconds=timeout_seconds)
+    proxy_url: str | None = None
+    try:
+        from antigravity_cli_switcher.manager.state import _normalize_proxy_config, load_state
+
+        state = load_state(paths)
+        acc_meta = state.get("accounts", {}).get(account_name)
+        if isinstance(acc_meta, dict):
+            proxy_cfg = _normalize_proxy_config(acc_meta.get("proxy"))
+            if proxy_cfg.get("enabled") and proxy_cfg.get("url"):
+                proxy_url = str(proxy_cfg["url"])
+    except Exception:
+        pass
+
+    access_token = _ensure_fresh_access_token(
+        source_home, agy_binary=agy_binary, timeout_seconds=timeout_seconds, proxy_url=proxy_url
+    )
     fallback_used = bool(getattr(access_token, "fallback_used", False))
 
-    load_response = _cloudcode_request(access_token, CODE_ASSIST_LOAD_PATH, {})
+    def _do_cloudcode_req(path: str, req_payload: dict, _proxy: str | None = proxy_url) -> dict:
+        if _proxy:
+            return _cloudcode_request(access_token, path, req_payload, proxy_url=_proxy)
+        return _cloudcode_request(access_token, path, req_payload)
+
+    load_response = _do_cloudcode_req(CODE_ASSIST_LOAD_PATH, {})
     ineligible_tiers = load_response.get("ineligibleTiers") or load_response.get("ineligible_tiers")
     if isinstance(ineligible_tiers, list) and ineligible_tiers:
         first_tier = ineligible_tiers[0] if isinstance(ineligible_tiers[0], dict) else {}
@@ -393,7 +437,7 @@ def _refresh_http_quota(
     summary_response = {}
     bucket_count = 0
     try:
-        summary_response = _cloudcode_request(access_token, CODE_ASSIST_QUOTA_SUMMARY_PATH, quota_request)
+        summary_response = _do_cloudcode_req(CODE_ASSIST_QUOTA_SUMMARY_PATH, quota_request)
         usage_families, bucket_count = _parse_quota_families_from_summary(summary_response)
     except Exception as exc:
         if is_ineligible_error(str(exc)):
@@ -401,7 +445,7 @@ def _refresh_http_quota(
         usage_families = _default_usage_families()
 
     if bucket_count == 0:
-        quota_response = _cloudcode_request(access_token, CODE_ASSIST_QUOTA_PATH, quota_request)
+        quota_response = _do_cloudcode_req(CODE_ASSIST_QUOTA_PATH, quota_request)
         short_window, _weekly = _extract_single_bucket_quota(quota_response)
         usage_families["gemini"]["short"] = short_window
 
@@ -409,7 +453,10 @@ def _refresh_http_quota(
 
     userinfo = None
     try:
-        userinfo = _google_userinfo_request(access_token)
+        if proxy_url:
+            userinfo = _google_userinfo_request(access_token, proxy_url=proxy_url)
+        else:
+            userinfo = _google_userinfo_request(access_token)
     except Exception:
         pass
 
@@ -464,11 +511,11 @@ def refresh_account_usage(
             return _refresh_http_quota(paths, account_name, source_home, agy_binary, timeout_seconds)
         elif resolved_backend == "auto":
             try:
-                return _refresh_native_quota(paths, account_name, source_home, agy_binary, timeout_seconds)
+                return _refresh_http_quota(paths, account_name, source_home, agy_binary, timeout_seconds)
             except Exception as exc:
                 if is_ineligible_error(str(exc)):
                     raise
-                return _refresh_http_quota(paths, account_name, source_home, agy_binary, timeout_seconds)
+                return _refresh_native_quota(paths, account_name, source_home, agy_binary, timeout_seconds)
         else:
             raise ValueError(f"Unknown quota backend: {resolved_backend}")
     except Exception as exc:

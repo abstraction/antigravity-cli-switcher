@@ -20,6 +20,9 @@ from antigravity_cli_switcher.manager.paths import (
     _resolve_home_source,
     _resolve_profile_source,
     account_dir,
+    get_acs_id_path,
+    read_acs_id,
+    write_acs_id,
 )
 from antigravity_cli_switcher.manager.state import (
     DEFAULT_REFRESH_POLICY_SECONDS,
@@ -91,7 +94,8 @@ def save_account_profile(paths: ManagerPaths, name: str, source_dir: Path, overw
     if not profile_source.exists() or not profile_source.is_dir():
         raise ValueError(f"Usable profile source not found in {source_dir}")
 
-    _sync_keyring_to_home(home_source)
+    if not profile_has_login_artifacts(profile_source):
+        _sync_keyring_to_home(home_source)
     if not profile_has_login_artifacts(profile_source):
         raise ValueError(f"Profile source is missing required auth files: {profile_source}")
 
@@ -99,22 +103,117 @@ def save_account_profile(paths: ManagerPaths, name: str, source_dir: Path, overw
     target_exists = target.exists()
     if target_exists and not overwrite:
         raise ValueError(f"Account already exists: {name}")
+
+    from antigravity_cli_switcher.manager.stealth import (
+        ensure_account_identity_files,
+        extract_jetski_uuid,
+        read_canonical_uuid_file,
+        write_canonical_uuid_file,
+        write_jetski_uuid_file,
+    )
+
+    stashed_identity_files: dict[str, bytes] = {}
+    if target_exists and overwrite:
+        existing_gdir = _resolve_profile_source(target)
+        ensure_account_identity_files(existing_gdir)
+        to_stash = (
+            ("cli_id", existing_gdir / "antigravity-cli" / "installation_id"),
+            ("root_id", existing_gdir / "installation_id"),
+            ("jetski", existing_gdir / "antigravity-cli" / "jetski_state.pbtxt"),
+            ("acs_id", target / ".acs_id"),
+        )
+        for tag, p in to_stash:
+            if p.is_file() and p.stat().st_size > 0:
+                try:
+                    stashed_identity_files[tag] = p.read_bytes()
+                except OSError:
+                    pass
+
     if target_exists:
         _clear_directory(target)
     else:
         target.mkdir(parents=True, exist_ok=False)
     _copy_account_profile(home_source, target)
-    from antigravity_cli_switcher.manager.stealth import ensure_account_identity_files
 
     gemini_target = target / ".gemini" if (target / ".gemini").is_dir() else target
+    for tag, content in stashed_identity_files.items():
+        if tag == "cli_id":
+            dest = gemini_target / "antigravity-cli" / "installation_id"
+        elif tag == "root_id":
+            dest = gemini_target / "installation_id"
+        elif tag == "jetski":
+            dest = gemini_target / "antigravity-cli" / "jetski_state.pbtxt"
+        elif tag == "acs_id":
+            dest = target / ".acs_id"
+        else:
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            dest.write_bytes(content)
+            dest.chmod(0o644)
+        except OSError:
+            pass
+
     ensure_account_identity_files(gemini_target)
-    identity = _best_effort_saved_profile_identity(target)
 
     with manager_lock(paths):
         state = load_state(paths)
         state = sync_state_from_disk(paths, state)
         previous_meta = state["accounts"].get(name, {})
+        existing_acs_id = read_acs_id(target) or (
+            previous_meta.get("id") if isinstance(previous_meta, dict) and previous_meta.get("id") else None
+        )
+        acs_id = existing_acs_id or write_acs_id(target)
+        if not get_acs_id_path(target).is_file():
+            write_acs_id(target, acs_id)
+
+        if not overwrite:
+            existing_cli_ids: set[str] = set()
+            existing_root_ids: set[str] = set()
+            existing_jetski_ids: set[str] = set()
+            for other_name in state.get("accounts", {}):
+                if other_name == name:
+                    continue
+                other_dir = account_dir(paths, other_name)
+                if not other_dir.is_dir():
+                    continue
+                other_gdir = _resolve_profile_source(other_dir)
+                other_cli = read_canonical_uuid_file(other_gdir / "antigravity-cli" / "installation_id")
+                if other_cli:
+                    existing_cli_ids.add(other_cli)
+                other_root = read_canonical_uuid_file(other_gdir / "installation_id")
+                if other_root:
+                    existing_root_ids.add(other_root)
+                other_jetski_path = other_gdir / "antigravity-cli" / "jetski_state.pbtxt"
+                if other_jetski_path.is_file():
+                    try:
+                        other_jid = extract_jetski_uuid(other_jetski_path.read_text(encoding="utf-8"))
+                        if other_jid:
+                            existing_jetski_ids.add(other_jid)
+                    except OSError:
+                        pass
+
+            cli_p = gemini_target / "antigravity-cli" / "installation_id"
+            root_p = gemini_target / "installation_id"
+            jetski_p = gemini_target / "antigravity-cli" / "jetski_state.pbtxt"
+
+            curr_cli = read_canonical_uuid_file(cli_p)
+            if curr_cli and curr_cli in existing_cli_ids:
+                write_canonical_uuid_file(cli_p)
+            curr_root = read_canonical_uuid_file(root_p)
+            if curr_root and curr_root in existing_root_ids:
+                write_canonical_uuid_file(root_p)
+            if jetski_p.is_file():
+                try:
+                    curr_jid = extract_jetski_uuid(jetski_p.read_text(encoding="utf-8"))
+                    if curr_jid and curr_jid in existing_jetski_ids:
+                        write_jetski_uuid_file(jetski_p)
+                except OSError:
+                    pass
+
+        identity = _best_effort_saved_profile_identity(target)
         state["accounts"][name] = {
+            "id": acs_id,
             "enabled": previous_meta.get("enabled", True),
             "status": previous_meta.get("status", "standby"),
             "last_error": None if overwrite else previous_meta.get("last_error"),
@@ -175,8 +274,10 @@ def rename_account(paths: ManagerPaths, old_name: str, new_name: str) -> None:
 
     with manager_lock(paths):
         state = load_state(paths)
-        if old_name not in state["accounts"]:
+        resolved_old = resolve_account_name(state, old_name)
+        if resolved_old not in state["accounts"]:
             raise ValueError(f"Account '{old_name}' not found.")
+        old_name = resolved_old
         if new_name in state["accounts"]:
             raise ValueError(f"Account '{new_name}' already exists.")
 
@@ -200,6 +301,21 @@ def rename_account(paths: ManagerPaths, old_name: str, new_name: str) -> None:
             if fleet_util.get("last_active_account") == old_name:
                 fleet_util["last_active_account"] = new_name
 
+        history = state.get("switch_history")
+        if isinstance(history, list):
+            for entry in history:
+                if isinstance(entry, dict):
+                    for field in ("active", "previous_active", "switched_to", "from_account", "to_account"):
+                        if entry.get(field) == old_name:
+                            entry[field] = new_name
+
+        runtime = state.get("switch_runtime")
+        if isinstance(runtime, dict):
+            if runtime.get("active") == old_name:
+                runtime["active"] = new_name
+            if runtime.get("previous_active") == old_name:
+                runtime["previous_active"] = new_name
+
         save_state(paths, state)
 
 
@@ -208,8 +324,10 @@ def delete_account(paths: ManagerPaths, name: str) -> bool:
         raise ValueError("Account name cannot be empty.")
     with manager_lock(paths):
         state = sync_state_from_disk(paths, load_state(paths))
-        if name not in state["accounts"]:
+        resolved_name = resolve_account_name(state, name)
+        if resolved_name not in state["accounts"]:
             raise ValueError(f"Account not found: {name}")
+        name = resolved_name
 
         was_active = state.get("active") == name
 

@@ -98,6 +98,7 @@ class AccountMeta(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    id: str = ""
     enabled: bool = True
     status: str = "standby"
     plan_type: str | None = None
@@ -185,6 +186,7 @@ class SwitchRuntime(BaseModel):
     last_started_at: str | None = None
     last_completed_at: str | None = None
     last_account_switch_at: str | None = None
+    last_process_kill_at: str | None = None
 
 
 class SwitchHistoryEntry(BaseModel):

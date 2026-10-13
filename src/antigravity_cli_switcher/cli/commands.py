@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 from antigravity_cli_switcher.cli.interactive import (
@@ -36,6 +35,11 @@ from antigravity_cli_switcher.cli.refresh import (
     cmd_refresh_due,
     cmd_refresh_usage,
 )
+from antigravity_cli_switcher.cli.switch import (
+    cmd_rotate,
+    cmd_switch,
+    cmd_switch_next,
+)
 from antigravity_cli_switcher.manager import (
     ManagerPaths,
     add_account,
@@ -56,6 +60,7 @@ from antigravity_cli_switcher.manager import (
     probe_profile_identity_via_usage,
     refresh_account_identity,
     rename_account,
+    resolve_account_name,
     resolve_route,
     set_account_proxy,
     set_enabled,
@@ -77,6 +82,8 @@ __all__ = [
     "run_login_with_prompt",
     "run_menu",
     "run_proxy_dashboard",
+    "switch_account",
+    "switch_next",
 ]
 
 
@@ -117,34 +124,37 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
         print_proxy_list(paths, args.json)
         return 0
     if cmd == "proxy-show":
-        print_proxy_show(paths, args.name, args.json)
+        resolved_name = resolve_account_name(load_state(paths), args.name)
+        print_proxy_show(paths, resolved_name, args.json)
         return 0
     if cmd == "proxy-set":
+        resolved_name = resolve_account_name(load_state(paths), args.name)
         payload = set_account_proxy(
             paths,
-            args.name,
+            resolved_name,
             url=args.url,
             label=args.label,
             enabled=not args.disabled,
         )
-        proxy_payload = {"account": args.name, "proxy": payload}
+        proxy_payload = {"account": resolved_name, "proxy": payload}
         if args.json:
             print(json.dumps(proxy_payload, indent=2, sort_keys=True))
         else:
             print(
-                f"proxy-set: {args.name} "
+                f"proxy-set: {resolved_name} "
                 f"label={payload.get('label') or '-'} "
                 f"url={payload.get('url') or '-'} "
                 f"enabled={payload.get('enabled', False)}"
             )
         return 0
     if cmd == "proxy-clear":
-        clear_account_proxy(paths, args.name)
-        clear_payload = {"account": args.name, "proxy": {"enabled": False, "label": None, "url": None}}
+        resolved_name = resolve_account_name(load_state(paths), args.name)
+        clear_account_proxy(paths, resolved_name)
+        clear_payload = {"account": resolved_name, "proxy": {"enabled": False, "label": None, "url": None}}
         if args.json:
             print(json.dumps(clear_payload, indent=2, sort_keys=True))
         else:
-            print(f"proxy-cleared: {args.name}")
+            print(f"proxy-cleared: {resolved_name}")
         return 0
     if cmd == "whoami":
         if args.refresh and args.name:
@@ -256,7 +266,7 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
     if cmd == "quota-backend":
         snapshot = get_status_snapshot(paths)
         if args.backend is None:
-            backend_payload = {"quota_backend": snapshot.get("quota_backend", "native")}
+            backend_payload = {"quota_backend": snapshot.get("quota_backend", "http")}
             if args.json:
                 print(json.dumps(backend_payload, indent=2, sort_keys=True))
             else:
@@ -326,55 +336,25 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
         import_current(paths, args.name, args.source_dir)
         print(f"imported-current: {args.name}")
         return 0
-    if cmd == "login":
+    if cmd in ("login", "relogin"):
         raw_name = " ".join(args.name).strip() if isinstance(args.name, list) else (args.name or "").strip()
         name = raw_name or prompt_nonempty("Account name")
+        overwrite_existing = True if cmd == "relogin" else bool(getattr(args, "overwrite", False))
         stored_name = run_login_with_prompt(
             paths,
             name,
             args.agy_binary,
             args.timeout_seconds,
-            overwrite_existing=bool(getattr(args, "overwrite", False)),
+            overwrite_existing=overwrite_existing,
         )
         print(f"{'logged-in' if stored_name else 'cancelled'}: {stored_name or name}")
         return 0
-    if cmd == "switch" or cmd == "activate":
-        raw_name = " ".join(args.name) if isinstance(args.name, list) else args.name
-        verb = "switched" if cmd == "switch" else "activated"
-        force = bool(getattr(args, "force", False))
-        try:
-            previous = switch_account(paths, raw_name, force=force)
-        except RuntimeError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 1
-        state = load_state(paths)
-        resolved_name = state.get("active") or raw_name
-        if previous:
-            print(f"{verb}: {previous} -> {resolved_name}")
-        else:
-            print(f"{verb}: {resolved_name}")
-        return 0
+    if cmd in ("switch", "activate"):
+        return cmd_switch(paths, args, cmd_name=cmd, switch_fn=switch_account)
     if cmd == "switch-next":
-        force = bool(getattr(args, "force", False))
-        try:
-            target = switch_next(paths, force=force)
-        except RuntimeError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 1
-        print(f"switched-next: {target}")
-        return 0
+        return cmd_switch_next(paths, args, switch_next_fn=switch_next)
     if cmd == "rotate":
-        force = bool(getattr(args, "force", False))
-        try:
-            target = switch_next(paths, force=force)
-        except RuntimeError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 1
-        if args.json:
-            print(json.dumps({"active": target}, indent=2, sort_keys=True))
-        else:
-            print(f"rotated: {target}")
-        return 0
+        return cmd_rotate(paths, args, switch_next_fn=switch_next)
     if cmd == "disable":
         set_enabled(paths, args.name, False)
         print(f"disabled: {args.name}")
@@ -392,12 +372,13 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
         print(f"cleared-bad: {args.name}")
         return 0
     if cmd == "rename":
-        rename_account(paths, args.old_name, args.new_name)
+        resolved_old = resolve_account_name(load_state(paths), args.old_name)
+        rename_account(paths, resolved_old, args.new_name)
         if args.json:
             print(
                 json.dumps(
                     {
-                        "renamed_from": args.old_name,
+                        "renamed_from": resolved_old,
                         "renamed_to": args.new_name,
                     },
                     indent=2,
@@ -405,15 +386,16 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
                 )
             )
         else:
-            print(f"renamed: '{args.old_name}' -> '{args.new_name}'")
+            print(f"renamed: '{resolved_old}' -> '{args.new_name}'")
         return 0
     if cmd == "delete":
-        was_active = delete_account(paths, args.name)
+        resolved_name = resolve_account_name(load_state(paths), args.name)
+        was_active = delete_account(paths, resolved_name)
         if args.json:
             print(
                 json.dumps(
                     {
-                        "deleted": args.name,
+                        "deleted": resolved_name,
                         "was_active": was_active,
                     },
                     indent=2,
@@ -422,7 +404,7 @@ def dispatch_command(paths: ManagerPaths, args: argparse.Namespace, parser: argp
             )
         else:
             suffix = " (was active — no account is now active)" if was_active else ""
-            print(f"deleted: {args.name}{suffix}")
+            print(f"deleted: {resolved_name}{suffix}")
         return 0
     if cmd == "set-email":
         raw_name = " ".join(args.name) if isinstance(args.name, list) else str(args.name)

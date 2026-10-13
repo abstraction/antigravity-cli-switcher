@@ -276,6 +276,8 @@ def _clear_keyring_token() -> bool:
 
 
 def _sync_keyring_to_home(target_home: Path) -> bool:
+    import uuid
+
     token_data = _load_keyring_token()
     if not isinstance(token_data, dict) or not isinstance(token_data.get("token"), dict):
         return False
@@ -284,11 +286,19 @@ def _sync_keyring_to_home(target_home: Path) -> bool:
         return False
     token_path = _oauth_token_path(_resolve_home_source(target_home))
     token_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = token_path.parent / f".tmp_{token_path.name}_{uuid.uuid4().hex}"
     try:
-        token_path.write_text(json.dumps(token_data, indent=2) + "\n", encoding="utf-8")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        fd = os.open(tmp_path, flags, 0o600)
+        with open(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(token_data, indent=2) + "\n")
+        os.replace(tmp_path, token_path)
         return True
     except Exception:
         return False
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
 
 
 def _sync_home_to_keyring(source_home: Path) -> bool:
@@ -305,17 +315,13 @@ def _sync_home_to_keyring(source_home: Path) -> bool:
 
 @contextmanager
 def _isolated_keyring_warmup(source_home: Path) -> Iterator[None]:
-    restore_keyring = _load_keyring_token()
-    if restore_keyring and not _is_test_environment() and is_synthetic_or_test_token(restore_keyring):
-        get_logger().warning("Discarded synthetic token found in keyring prior to warmup.")
-        restore_keyring = None
-    _clear_keyring_token()
-    _sync_home_to_keyring(source_home)
+    """Isolate D-Bus session bus address so child processes fall back to file tokens natively ([INV-03])."""
+    old_dbus = os.environ.get("DBUS_SESSION_BUS_ADDRESS")
+    os.environ["DBUS_SESSION_BUS_ADDRESS"] = ""
     try:
         yield
     finally:
-        _sync_keyring_to_home(source_home)
-        if restore_keyring:
-            _save_keyring_token(restore_keyring)
+        if old_dbus is None:
+            os.environ.pop("DBUS_SESSION_BUS_ADDRESS", None)
         else:
-            _clear_keyring_token()
+            os.environ["DBUS_SESSION_BUS_ADDRESS"] = old_dbus

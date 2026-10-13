@@ -215,7 +215,7 @@ def run_menu(paths: ManagerPaths, parser: argparse.ArgumentParser) -> int:
                 return 0
             else:
                 print("Unknown selection.")
-        except ValueError as e:
+        except (ValueError, RuntimeError) as e:
             print(f"error: {e}")
         except KeyboardInterrupt:
             print("\nCancelled.")

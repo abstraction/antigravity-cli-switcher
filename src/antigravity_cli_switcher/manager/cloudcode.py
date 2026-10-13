@@ -4,7 +4,6 @@ import json
 import platform
 import re
 import ssl
-import subprocess
 import urllib.request
 from collections.abc import Mapping
 from pathlib import Path
@@ -28,23 +27,36 @@ CODE_ASSIST_QUOTA_SUMMARY_PATH = "/v1internal:retrieveUserQuotaSummary"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
-def _get_dynamic_user_agent() -> str:
-    version = "1.3.3"
+def _detect_static_binary_version() -> str:
     try:
         binary = resolve_agy_binary(None)
-        result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=1.0)
-        resolved_version = result.stdout.strip()
-        if resolved_version:
-            version = resolved_version
+        paths_to_check = [binary]
+        try:
+            resolved_path = str(Path(binary).resolve())
+            if resolved_path != binary:
+                paths_to_check.append(resolved_path)
+        except Exception:
+            pass
+        for path_str in paths_to_check:
+            match = re.search(r"antigravity-cli/(\d+\.\d+\.\d+)", path_str)
+            if match:
+                return match.group(1)
+            match = re.search(r"(?:agy|antigravity)(?:[-_.]v?|/)(\d+\.\d+\.\d+)", path_str)
+            if match:
+                return match.group(1)
     except Exception:
         pass
+    return "1.3.3"
 
+
+def _get_static_user_agent() -> str:
+    version = _detect_static_binary_version()
     os_name = "darwin" if platform.system().lower() == "darwin" else "linux"
     arch = "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
-    return f"antigravity/{version} {os_name}/{arch}"
+    return f"aidev_client/{version} auth_method=oauth os_type={os_name} arch={arch}"
 
 
-CODE_ASSIST_USER_AGENT = _get_dynamic_user_agent()
+CODE_ASSIST_USER_AGENT = _get_static_user_agent()
 
 _PLAN_TYPE_LABELS: dict[str, tuple[str, str]] = {
     # Legacy planType enum values (may appear in old API responses)
@@ -127,7 +139,58 @@ def _extract_plan_tier(load_response: Mapping[str, object]) -> str | None:
     return None
 
 
-def _cloudcode_request(access_token: str, path: str, payload: dict) -> dict:
+def _build_url_opener(proxy_url: str | None = None) -> urllib.request.OpenerDirector:
+    ctx = ssl.create_default_context()
+    handlers: list[urllib.request.BaseHandler] = [urllib.request.HTTPSHandler(context=ctx)]
+    if proxy_url:
+        handlers.append(urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url}))
+    return urllib.request.build_opener(*handlers)
+
+
+def _resolve_active_proxy_url() -> str | None:
+    try:
+        from antigravity_cli_switcher.manager.paths import build_paths
+        from antigravity_cli_switcher.manager.state import _normalize_proxy_config, load_state
+
+        paths = build_paths()
+        if paths.state_file.is_file():
+            state = load_state(paths)
+            active = state.get("active")
+            if active and isinstance(state.get("accounts"), dict):
+                acc_meta = state["accounts"].get(active)
+                if isinstance(acc_meta, dict):
+                    proxy = _normalize_proxy_config(acc_meta.get("proxy"))
+                    if proxy.get("enabled") and proxy.get("url"):
+                        return str(proxy["url"])
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_account_proxy_url(source_home: Path | None = None) -> str | None:
+    if source_home is None:
+        return None
+    try:
+        from antigravity_cli_switcher.manager.paths import build_paths
+        from antigravity_cli_switcher.manager.state import _normalize_proxy_config, load_state
+
+        paths = build_paths()
+        if paths.state_file.is_file():
+            state = load_state(paths)
+            accounts = state.get("accounts")
+            if isinstance(accounts, dict):
+                # Search by matching directory name
+                acc_meta = accounts.get(source_home.name)
+                if isinstance(acc_meta, dict):
+                    proxy = _normalize_proxy_config(acc_meta.get("proxy"))
+                    if proxy.get("enabled") and proxy.get("url"):
+                        return str(proxy["url"])
+    except Exception:
+        pass
+    return None
+
+
+def _cloudcode_request(access_token: str, path: str, payload: dict, proxy_url: str | None = None) -> dict:
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         CODE_ASSIST_BASE_URL + path,
@@ -140,8 +203,15 @@ def _cloudcode_request(access_token: str, path: str, payload: dict) -> dict:
         },
         method="POST",
     )
+    effective_proxy = proxy_url
     try:
-        with urllib.request.urlopen(req, timeout=20, context=ssl.create_default_context()) as resp:
+        if effective_proxy:
+            opener = _build_url_opener(effective_proxy)
+            resp_cm = opener.open(req, timeout=20)
+        else:
+            resp_cm = urllib.request.urlopen(req, timeout=20, context=ssl.create_default_context())
+
+        with resp_cm as resp:
             data = json.loads(resp.read().decode("utf-8"))
             if not isinstance(data, dict):
                 raise ValueError(f"Unexpected Cloud Code response type for {path}")
@@ -162,7 +232,7 @@ def _cloudcode_request(access_token: str, path: str, payload: dict) -> dict:
         raise ValueError(message or f"Cloud Code request failed with HTTP {exc.code}.") from exc
 
 
-def _google_userinfo_request(access_token: str) -> dict:
+def _google_userinfo_request(access_token: str, proxy_url: str | None = None) -> dict:
     req = urllib.request.Request(
         GOOGLE_USERINFO_URL,
         headers={
@@ -171,8 +241,15 @@ def _google_userinfo_request(access_token: str) -> dict:
         },
         method="GET",
     )
+    effective_proxy = proxy_url
     try:
-        with urllib.request.urlopen(req, timeout=15, context=ssl.create_default_context()) as resp:
+        if effective_proxy:
+            opener = _build_url_opener(effective_proxy)
+            resp_cm = opener.open(req, timeout=15)
+        else:
+            resp_cm = urllib.request.urlopen(req, timeout=15, context=ssl.create_default_context())
+
+        with resp_cm as resp:
             data = json.loads(resp.read().decode("utf-8"))
             if not isinstance(data, dict):
                 raise ValueError("Unexpected Google userinfo response type.")
@@ -396,6 +473,8 @@ __all__ = [
     "_parse_summary_bucket",
     "_persist_project_id",
     "_quota_group_family",
+    "_resolve_account_proxy_url",
+    "_resolve_active_proxy_url",
     "_select_quota_summary_group",
     "format_plan_type_compact",
     "format_plan_type_label",

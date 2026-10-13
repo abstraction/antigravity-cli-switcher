@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 
 from antigravity_cli_switcher.manager.identity import (
     _identity_from_antigravity_token,
@@ -13,6 +15,7 @@ from antigravity_cli_switcher.manager.keyring import (
     _save_keyring_token,
     is_synthetic_or_test_token,
 )
+from antigravity_cli_switcher.manager.locking import manager_lock
 from antigravity_cli_switcher.manager.paths import (
     ManagerPaths,
     _oauth_token_path,
@@ -23,6 +26,7 @@ from antigravity_cli_switcher.manager.paths import (
 from antigravity_cli_switcher.manager.state import (
     get_live_dir,
     load_state,
+    save_state,
     sync_state_from_disk,
 )
 from antigravity_cli_switcher.manager.stealth import (
@@ -30,6 +34,7 @@ from antigravity_cli_switcher.manager.stealth import (
     extract_jetski_uuid,
     read_canonical_uuid_file,
     write_canonical_uuid_file,
+    write_jetski_uuid_file,
 )
 
 
@@ -98,74 +103,56 @@ def check_hygiene(paths: ManagerPaths) -> list[HygieneAuditResult]:
                 )
             )
 
-    # 2. Runtime directory audit
-    runtime_tok = _oauth_token_path(paths.runtime_dir)
-    if runtime_tok.is_file():
+    # 2. Runtime and Live directory audit
+    def _audit_token_file(target: str, category: str, tok_path: Path, desc: str, remed: str) -> None:
+        if not tok_path.is_file():
+            return
         try:
-            rdata = json.loads(runtime_tok.read_text(encoding="utf-8"))
-            if is_synthetic_or_test_token(rdata):
+            data = json.loads(tok_path.read_text(encoding="utf-8"))
+            if is_synthetic_or_test_token(data):
                 results.append(
                     HygieneAuditResult(
-                        target="runtime",
-                        category="runtime",
+                        target=target,
+                        category=category,
                         status="contaminated",
-                        detail="Runtime profile has synthetic token",
-                        remediation="Run 'acs hygiene --fix' or switch accounts.",
+                        detail=f"{desc} has synthetic token",
+                        remediation=remed,
                     )
                 )
             else:
                 results.append(
                     HygieneAuditResult(
-                        target="runtime",
-                        category="runtime",
+                        target=target,
+                        category=category,
                         status="clean",
-                        detail="Runtime profile token is authentic",
+                        detail=f"{desc} token is authentic",
                     )
                 )
         except Exception as exc:
             results.append(
                 HygieneAuditResult(
-                    target="runtime",
-                    category="runtime",
+                    target=target,
+                    category=category,
                     status="warning",
-                    detail=f"Runtime token error: {exc}",
+                    detail=f"{target} token error: {exc}",
                 )
             )
 
-    # 3. Live directory audit
+    _audit_token_file(
+        "runtime",
+        "runtime",
+        _oauth_token_path(paths.runtime_dir),
+        "Runtime profile",
+        "Run 'acs hygiene --fix' or switch accounts.",
+    )
     live_dir = get_live_dir(state) or default_live_dir(paths.root)
-    live_tok = _oauth_token_path(_resolve_home_source(live_dir))
-    if live_tok.is_file():
-        try:
-            ldata = json.loads(live_tok.read_text(encoding="utf-8"))
-            if is_synthetic_or_test_token(ldata):
-                results.append(
-                    HygieneAuditResult(
-                        target="live_dir",
-                        category="live_dir",
-                        status="contaminated",
-                        detail=f"Live directory ({live_dir}) has synthetic token",
-                        remediation="Run 'acs hygiene --fix' to restore active account token.",
-                    )
-                )
-            else:
-                results.append(
-                    HygieneAuditResult(
-                        target="live_dir",
-                        category="live_dir",
-                        status="clean",
-                        detail=f"Live directory ({live_dir}) token is authentic",
-                    )
-                )
-        except Exception as exc:
-            results.append(
-                HygieneAuditResult(
-                    target="live_dir",
-                    category="live_dir",
-                    status="warning",
-                    detail=f"Live token error: {exc}",
-                )
-            )
+    _audit_token_file(
+        "live_dir",
+        "live_dir",
+        _oauth_token_path(_resolve_home_source(live_dir)),
+        f"Live directory ({live_dir})",
+        "Run 'acs hygiene --fix' to restore active account token.",
+    )
 
     # 4. OS Keyring audit
     ktok = _load_keyring_token()
@@ -204,6 +191,7 @@ def check_hygiene(paths: ManagerPaths) -> list[HygieneAuditResult]:
     # 5. Identity files audit (installation_id and jetski_state)
     cli_ids: dict[str, list[str]] = {}
     root_ids: dict[str, list[str]] = {}
+    jetski_ids: dict[str, list[str]] = {}
 
     for name in sorted(state.get("accounts", {}).keys()):
         adir = account_dir(paths, name)
@@ -278,7 +266,8 @@ def check_hygiene(paths: ManagerPaths) -> list[HygieneAuditResult]:
         else:
             try:
                 content = jetski_file.read_text(encoding="utf-8")
-                if not extract_jetski_uuid(content):
+                jid = extract_jetski_uuid(content)
+                if not jid:
                     results.append(
                         HygieneAuditResult(
                             target=name,
@@ -288,6 +277,8 @@ def check_hygiene(paths: ManagerPaths) -> list[HygieneAuditResult]:
                             remediation=f"Run 'acs hygiene --fix' to repair installation_uuid for '{name}'.",
                         )
                     )
+                else:
+                    jetski_ids.setdefault(jid, []).append(name)
             except OSError as exc:
                 results.append(
                     HygieneAuditResult(
@@ -299,20 +290,25 @@ def check_hygiene(paths: ManagerPaths) -> list[HygieneAuditResult]:
                     )
                 )
 
-    # Collision checks
-    for cid, names in cli_ids.items():
-        if len(names) > 1:
-            for n in names:
-                other = [x for x in names if x != n]
-                results.append(
-                    HygieneAuditResult(
-                        target=n,
-                        category="installation_id",
-                        status="contaminated",
-                        detail=f"Installation ID collision with {', '.join(other)} ({cid[:8]}…)",
-                        remediation="Run 'acs hygiene --fix' to assign unique IDs.",
+    # Collision checks across all three identity files
+    def _record_collisions(id_map: dict[str, list[str]], cat: str, lbl: str) -> None:
+        for val_id, names in id_map.items():
+            if len(names) > 1:
+                for n in names:
+                    other = [x for x in names if x != n]
+                    results.append(
+                        HygieneAuditResult(
+                            target=n,
+                            category=cat,
+                            status="contaminated",
+                            detail=f"{lbl} collision with {', '.join(other)} ({val_id[:8]}…)",
+                            remediation="Run 'acs hygiene --fix' to assign unique IDs.",
+                        )
                     )
-                )
+
+    _record_collisions(cli_ids, "installation_id", "Installation ID")
+    _record_collisions(root_ids, "installation_id", "Root installation ID")
+    _record_collisions(jetski_ids, "jetski_state", "Jetski installation_uuid")
 
     # Active profile live match check
     active = state.get("active")
@@ -340,93 +336,140 @@ def check_hygiene(paths: ManagerPaths) -> list[HygieneAuditResult]:
 
 def fix_hygiene(paths: ManagerPaths) -> list[str]:
     actions_taken: list[str] = []
-    state = sync_state_from_disk(paths, load_state(paths))
-    active = state.get("active")
-    active_tok_data = None
-    if active and account_dir(paths, active).exists():
-        active_tok = _oauth_token_path(account_dir(paths, active))
-        if active_tok.is_file():
+    with manager_lock(paths):
+        state = sync_state_from_disk(paths, load_state(paths))
+        active = state.get("active")
+        active_tok_data = None
+        if active and account_dir(paths, active).exists():
+            active_tok = _oauth_token_path(account_dir(paths, active))
+            if active_tok.is_file():
+                try:
+                    candidate = json.loads(active_tok.read_text(encoding="utf-8"))
+                    if not is_synthetic_or_test_token(candidate):
+                        active_tok_data = candidate
+                except Exception:
+                    pass
+
+        # 1. Clean OS keyring if contaminated
+        ktok = _load_keyring_token()
+        if ktok and is_synthetic_or_test_token(ktok):
+            _clear_keyring_token()
+            actions_taken.append("Cleared synthetic token from global OS keyring.")
+            if active_tok_data:
+                _save_keyring_token(active_tok_data)
+                actions_taken.append(f"Restored authentic token for active account '{active}' to OS keyring.")
+
+        # 2. Clean live dir if contaminated
+        live_dir = get_live_dir(state) or default_live_dir(paths.root)
+        live_tok = _oauth_token_path(_resolve_home_source(live_dir))
+        if live_tok.is_file():
             try:
-                candidate = json.loads(active_tok.read_text(encoding="utf-8"))
-                if not is_synthetic_or_test_token(candidate):
-                    active_tok_data = candidate
+                ldata = json.loads(live_tok.read_text(encoding="utf-8"))
+                if is_synthetic_or_test_token(ldata):
+                    live_tok.unlink(missing_ok=True)
+                    actions_taken.append(f"Removed synthetic token file from live directory ({live_tok}).")
+                    if active_tok_data:
+                        live_tok.write_text(json.dumps(active_tok_data, indent=2) + "\n", encoding="utf-8")
+                        actions_taken.append(f"Copied authentic '{active}' token to live directory.")
             except Exception:
                 pass
+            try:
+                live_tok.chmod(0o600)
+            except OSError:
+                pass
 
-    # 1. Clean OS keyring if contaminated
-    ktok = _load_keyring_token()
-    if ktok and is_synthetic_or_test_token(ktok):
-        _clear_keyring_token()
-        actions_taken.append("Cleared synthetic token from global OS keyring.")
-        if active_tok_data:
-            _save_keyring_token(active_tok_data)
-            actions_taken.append(f"Restored authentic token for active account '{active}' to OS keyring.")
+        # 3. Clean runtime dir if contaminated
+        runtime_tok = _oauth_token_path(paths.runtime_dir)
+        if runtime_tok.is_file():
+            try:
+                rdata = json.loads(runtime_tok.read_text(encoding="utf-8"))
+                if is_synthetic_or_test_token(rdata):
+                    runtime_tok.unlink(missing_ok=True)
+                    actions_taken.append("Removed synthetic token file from runtime directory.")
+                    if active_tok_data:
+                        runtime_tok.write_text(json.dumps(active_tok_data, indent=2) + "\n", encoding="utf-8")
+                        actions_taken.append(f"Copied authentic '{active}' token to runtime directory.")
+            except Exception:
+                pass
+            try:
+                runtime_tok.chmod(0o600)
+            except OSError:
+                pass
 
-    # 2. Clean live dir if contaminated
-    live_dir = get_live_dir(state) or default_live_dir(paths.root)
-    live_tok = _oauth_token_path(_resolve_home_source(live_dir))
-    if live_tok.is_file():
-        try:
-            ldata = json.loads(live_tok.read_text(encoding="utf-8"))
-            if is_synthetic_or_test_token(ldata):
-                live_tok.unlink(missing_ok=True)
-                actions_taken.append(f"Removed synthetic token file from live directory ({live_tok}).")
-                if active_tok_data:
-                    live_tok.write_text(json.dumps(active_tok_data, indent=2) + "\n", encoding="utf-8")
-                    actions_taken.append(f"Copied authentic '{active}' token to live directory.")
-        except Exception:
-            pass
+        # 4. Repair identity files and resolve collisions
+        seen_cli_ids: set[str] = set()
+        seen_root_ids: set[str] = set()
+        seen_jetski_ids: set[str] = set()
+        accounts = state.get("accounts", {})
 
-    # 3. Clean runtime dir if contaminated
-    runtime_tok = _oauth_token_path(paths.runtime_dir)
-    if runtime_tok.is_file():
-        try:
-            rdata = json.loads(runtime_tok.read_text(encoding="utf-8"))
-            if is_synthetic_or_test_token(rdata):
-                runtime_tok.unlink(missing_ok=True)
-                actions_taken.append("Removed synthetic token file from runtime directory.")
-                if active_tok_data:
-                    runtime_tok.write_text(json.dumps(active_tok_data, indent=2) + "\n", encoding="utf-8")
-                    actions_taken.append(f"Copied authentic '{active}' token to runtime directory.")
-        except Exception:
-            pass
+        def _account_age_key(acc_name: str) -> tuple[str, str]:
+            meta = accounts.get(acc_name, {})
+            created_at = meta.get("created_at")
+            if not created_at:
+                adir = account_dir(paths, acc_name)
+                try:
+                    created_at = datetime.fromtimestamp(adir.stat().st_mtime, timezone.utc).isoformat()
+                except OSError:
+                    created_at = "9999-12-31T23:59:59Z"
+            return (str(created_at), acc_name)
 
-    # 4. Repair identity files and resolve collisions
-    seen_cli_ids: set[str] = set()
-    seen_root_ids: set[str] = set()
-    for name in sorted(state.get("accounts", {}).keys()):
-        adir = account_dir(paths, name)
-        gdir = adir / ".gemini" if (adir / ".gemini").is_dir() else adir
-        cli_file = gdir / "antigravity-cli" / "installation_id"
-        root_file = gdir / "installation_id"
+        for name in sorted(accounts.keys(), key=_account_age_key):
+            adir = account_dir(paths, name)
+            gdir = adir / ".gemini" if (adir / ".gemini").is_dir() else adir
+            cli_file = gdir / "antigravity-cli" / "installation_id"
+            root_file = gdir / "installation_id"
+            jetski_file = gdir / "antigravity-cli" / "jetski_state.pbtxt"
 
-        existing_cli = read_canonical_uuid_file(cli_file)
-        if not existing_cli or existing_cli in seen_cli_ids:
-            new_id = write_canonical_uuid_file(cli_file)
-            seen_cli_ids.add(new_id)
-            actions_taken.append(f"Assigned unique CLI installation_id for '{name}'.")
-        else:
-            seen_cli_ids.add(existing_cli)
+            existing_cli = read_canonical_uuid_file(cli_file)
+            if not existing_cli or existing_cli in seen_cli_ids:
+                new_id = write_canonical_uuid_file(cli_file)
+                seen_cli_ids.add(new_id)
+                actions_taken.append(f"Assigned unique CLI installation_id for '{name}'.")
+            else:
+                seen_cli_ids.add(existing_cli)
 
-        existing_root = read_canonical_uuid_file(root_file)
-        if not existing_root or existing_root in seen_root_ids:
-            new_root = write_canonical_uuid_file(root_file)
-            seen_root_ids.add(new_root)
-            actions_taken.append(f"Assigned unique root installation_id for '{name}'.")
-        else:
-            seen_root_ids.add(existing_root)
+            existing_root = read_canonical_uuid_file(root_file)
+            if not existing_root or existing_root in seen_root_ids:
+                new_root = write_canonical_uuid_file(root_file)
+                seen_root_ids.add(new_root)
+                actions_taken.append(f"Assigned unique root installation_id for '{name}'.")
+            else:
+                seen_root_ids.add(existing_root)
 
-        ensure_account_identity_files(gdir)
+            existing_jetski: str | None = None
+            if jetski_file.is_file():
+                try:
+                    content = jetski_file.read_text(encoding="utf-8")
+                    existing_jetski = extract_jetski_uuid(content)
+                except OSError:
+                    existing_jetski = None
 
-    # 5. Synchronize active account identity files to live and runtime
-    if active and account_dir(paths, active).exists():
-        from antigravity_cli_switcher.manager.accounts import (
-            _copy_active_runtime,
-            _sync_runtime_to_live_dir,
-        )
+            if not existing_jetski or existing_jetski in seen_jetski_ids:
+                new_jid = write_jetski_uuid_file(jetski_file)
+                seen_jetski_ids.add(new_jid)
+                actions_taken.append(f"Assigned unique jetski installation_uuid for '{name}'.")
+            else:
+                seen_jetski_ids.add(existing_jetski)
 
-        _copy_active_runtime(paths, active)
-        _sync_runtime_to_live_dir(paths, state)
-        actions_taken.append(f"Synchronized active profile '{active}' identity files to runtime and live host.")
+            ensure_account_identity_files(gdir)
+            acc_tok = _oauth_token_path(adir)
+            if acc_tok.is_file():
+                try:
+                    acc_tok.chmod(0o600)
+                except OSError:
+                    pass
+
+        # 5. Synchronize active account identity files to live and runtime
+        if active and account_dir(paths, active).exists():
+            from antigravity_cli_switcher.manager.accounts import (
+                _copy_active_runtime,
+                _sync_runtime_to_live_dir,
+            )
+
+            _copy_active_runtime(paths, active)
+            _sync_runtime_to_live_dir(paths, state)
+            actions_taken.append(f"Synchronized active profile '{active}' identity files to runtime and live host.")
+
+        save_state(paths, state)
 
     return actions_taken
