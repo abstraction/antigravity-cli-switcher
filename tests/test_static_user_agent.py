@@ -11,10 +11,10 @@ from antigravity_cli_switcher.manager.cloudcode import (
 
 
 def test_user_agent_format() -> None:
-    assert CODE_ASSIST_USER_AGENT.startswith("aidev_client/")
-    assert "auth_method=oauth" in CODE_ASSIST_USER_AGENT
-    assert "os_type=" in CODE_ASSIST_USER_AGENT
-    assert "arch=" in CODE_ASSIST_USER_AGENT
+    assert CODE_ASSIST_USER_AGENT.startswith("antigravity/")
+    assert not CODE_ASSIST_USER_AGENT.startswith("aidev_client/")
+    assert "linux" in CODE_ASSIST_USER_AGENT or "darwin" in CODE_ASSIST_USER_AGENT
+    assert "amd64" in CODE_ASSIST_USER_AGENT or "arm64" in CODE_ASSIST_USER_AGENT
 
 
 def test_cloudcode_import_runs_no_subprocess() -> None:

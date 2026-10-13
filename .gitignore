@@ -29,6 +29,7 @@ htmlcov/
 .agy-cli-manager/
 .antigravity-cli-switcher/
 .specstory/
+.gemini/
 AGENTS.md
 notes.md
 playground/

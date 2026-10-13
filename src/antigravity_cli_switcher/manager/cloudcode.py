@@ -53,7 +53,7 @@ def _get_static_user_agent() -> str:
     version = _detect_static_binary_version()
     os_name = "darwin" if platform.system().lower() == "darwin" else "linux"
     arch = "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
-    return f"aidev_client/{version} auth_method=oauth os_type={os_name} arch={arch}"
+    return f"antigravity/{version} {os_name}/{arch}"
 
 
 CODE_ASSIST_USER_AGENT = _get_static_user_agent()
