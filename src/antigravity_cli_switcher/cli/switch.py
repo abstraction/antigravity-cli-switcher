@@ -108,6 +108,8 @@ def cmd_switch(
     should_enforce = not _is_test_environment() or bool(os.getenv("ACS_ENFORCE_COOLDOWN"))
     if not force and should_enforce:
         cooldown_rem = get_switch_cooldown_remaining(state)
+        # running_pids=[]: pre-flight check assesses artifact/kill quiescence;
+        # switch execution terminates active processes before copying runtime.
         quiescence_rem = get_agy_quiescence_remaining(
             state=state, live_dir=get_live_dir(state), paths=paths, running_pids=[]
         )

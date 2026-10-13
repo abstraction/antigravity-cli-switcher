@@ -40,6 +40,7 @@ def emit_desktop_notification(
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
             close_fds=True,
+            start_new_session=True,
         )
         return True
     except OSError:

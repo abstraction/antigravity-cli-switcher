@@ -29,8 +29,9 @@ def test_cloudcode_request_uses_proxy_when_specified() -> None:
         mock_opener_builder.assert_called_once()
         # Verify proxy handler was included in arguments to build_opener
         handlers = mock_opener_builder.call_args[0]
-        has_proxy_handler = any(isinstance(h, type(mock_opener_builder)) or hasattr(h, "proxies") for h in handlers)
-        assert has_proxy_handler or len(handlers) >= 2
+        from urllib.request import ProxyHandler
+
+        assert any(isinstance(h, ProxyHandler) for h in handlers)
 
 
 def test_refresh_token_http_uses_proxy_when_specified(tmp_path: Path) -> None:
@@ -54,3 +55,7 @@ def test_refresh_token_http_uses_proxy_when_specified(tmp_path: Path) -> None:
         ok = _refresh_token_http(source_home, proxy_url="http://proxy.example.com:8080")
         assert ok is True
         mock_opener_builder.assert_called_once()
+        from urllib.request import ProxyHandler
+
+        handlers = mock_opener_builder.call_args[0]
+        assert any(isinstance(h, ProxyHandler) for h in handlers)

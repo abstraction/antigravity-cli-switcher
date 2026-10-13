@@ -99,6 +99,11 @@ def test_login_account_relogin_preseeds_and_preserves_established_identity(
         token_path = live_gemini / "antigravity-cli" / "antigravity-oauth-token"
         verified_preseeded_identity["token_absent"] = "1" if not token_path.exists() else "0"
 
+        # Verify env has HOME explicitly forwarded to runtime_home
+        env_passed = kwargs.get("env")
+        assert isinstance(env_passed, dict)
+        assert env_passed.get("HOME") == str(cwd_path)
+
         # Simulate agy finishing authentication by writing the fresh token
         token_path.parent.mkdir(parents=True, exist_ok=True)
         token_path.write_text(
@@ -221,6 +226,9 @@ def test_login_account_relogin_retains_state_id_when_disk_acs_id_absent(
 
     def mock_popen(*args, **kwargs):
         cwd_path = kwargs.get("cwd")
+        env_passed = kwargs.get("env")
+        assert isinstance(env_passed, dict)
+        assert env_passed.get("HOME") == str(cwd_path)
         token_path = cwd_path / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"
         token_path.parent.mkdir(parents=True, exist_ok=True)
         token_path.write_text(

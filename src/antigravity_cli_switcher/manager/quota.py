@@ -131,7 +131,7 @@ def _refresh_token_http(source_home: Path, proxy_url: str | None = None) -> bool
     import urllib.request
     import uuid
 
-    from antigravity_cli_switcher.manager.cloudcode import _build_url_opener, _resolve_active_proxy_url
+    from antigravity_cli_switcher.manager.cloudcode import _build_url_opener
     from antigravity_cli_switcher.manager.keyring import _load_antigravity_token_state, _oauth_token_path
 
     try:
@@ -155,7 +155,7 @@ def _refresh_token_http(source_home: Path, proxy_url: str | None = None) -> bool
             method="POST",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        effective_proxy = proxy_url or _resolve_active_proxy_url()
+        effective_proxy = proxy_url
         if effective_proxy:
             opener = _build_url_opener(effective_proxy)
             resp_cm = opener.open(req, timeout=10)
@@ -415,9 +415,9 @@ def _refresh_http_quota(
     )
     fallback_used = bool(getattr(access_token, "fallback_used", False))
 
-    def _do_cloudcode_req(path: str, req_payload: dict) -> dict:
-        if proxy_url:
-            return _cloudcode_request(access_token, path, req_payload, proxy_url=proxy_url)
+    def _do_cloudcode_req(path: str, req_payload: dict, _proxy: str | None = proxy_url) -> dict:
+        if _proxy:
+            return _cloudcode_request(access_token, path, req_payload, proxy_url=_proxy)
         return _cloudcode_request(access_token, path, req_payload)
 
     load_response = _do_cloudcode_req(CODE_ASSIST_LOAD_PATH, {})

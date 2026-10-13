@@ -410,7 +410,7 @@ def fix_hygiene(paths: ManagerPaths) -> list[str]:
                 try:
                     created_at = datetime.fromtimestamp(adir.stat().st_mtime, timezone.utc).isoformat()
                 except OSError:
-                    created_at = "9999-99-99T99:99:99Z"
+                    created_at = "9999-12-31T23:59:59Z"
             return (str(created_at), acc_name)
 
         for name in sorted(accounts.keys(), key=_account_age_key):

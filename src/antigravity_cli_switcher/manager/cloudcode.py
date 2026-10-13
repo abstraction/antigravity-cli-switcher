@@ -41,7 +41,7 @@ def _detect_static_binary_version() -> str:
             match = re.search(r"antigravity-cli/(\d+\.\d+\.\d+)", path_str)
             if match:
                 return match.group(1)
-            match = re.search(r"v?(\d+\.\d+\.\d+)", path_str)
+            match = re.search(r"(?:agy|antigravity)(?:[-_.]v?|/)(\d+\.\d+\.\d+)", path_str)
             if match:
                 return match.group(1)
     except Exception:
@@ -203,7 +203,7 @@ def _cloudcode_request(access_token: str, path: str, payload: dict, proxy_url: s
         },
         method="POST",
     )
-    effective_proxy = proxy_url or _resolve_active_proxy_url()
+    effective_proxy = proxy_url
     try:
         if effective_proxy:
             opener = _build_url_opener(effective_proxy)
@@ -241,7 +241,7 @@ def _google_userinfo_request(access_token: str, proxy_url: str | None = None) ->
         },
         method="GET",
     )
-    effective_proxy = proxy_url or _resolve_active_proxy_url()
+    effective_proxy = proxy_url
     try:
         if effective_proxy:
             opener = _build_url_opener(effective_proxy)

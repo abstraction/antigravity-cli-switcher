@@ -120,6 +120,8 @@ def switch_account(paths: ManagerPaths, name: str, *, force: bool = False) -> st
         if not is_same_account:
             if not force and should_enforce_cooldown:
                 cooldown_rem = get_switch_cooldown_remaining(state)
+                # running_pids=[]: quiescence check relies on artifact mtimes and last_process_kill_at;
+                # active processes are safely terminated by _ensure_safe_account_switch() immediately after.
                 quiescence_rem = get_agy_quiescence_remaining(
                     state=state, live_dir=get_live_dir(state), paths=paths, running_pids=[]
                 )
@@ -170,6 +172,8 @@ def switch_next(paths: ManagerPaths, *, force: bool = False) -> str:
         should_enforce_cooldown = not _is_test_environment() or bool(os.getenv("ACS_ENFORCE_COOLDOWN"))
         if not force and should_enforce_cooldown:
             cooldown_rem = get_switch_cooldown_remaining(state)
+            # running_pids=[]: quiescence check relies on artifact mtimes and last_process_kill_at;
+            # active processes are safely terminated by _ensure_safe_account_switch() immediately after.
             quiescence_rem = get_agy_quiescence_remaining(
                 state=state, live_dir=get_live_dir(state), paths=paths, running_pids=[]
             )

@@ -45,7 +45,8 @@ def test_quiescence_remaining_inactive_zero(tmp_path: Path) -> None:
     assert rem == 0.0
 
 
-def test_quiescence_remaining_active_process() -> None:
+def test_quiescence_remaining_active_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ACS_TEST_REAL_PROCS", "1")
     fake_procs = [98765]
     with patch(
         "antigravity_cli_switcher.manager.stealth.get_external_agy_processes",
@@ -53,6 +54,10 @@ def test_quiescence_remaining_active_process() -> None:
     ):
         rem = get_agy_quiescence_remaining()
         assert rem == float(STEALTH_SWITCH_COOLDOWN_SECONDS)
+
+    # Explicit running_pids parameter test contract
+    assert get_agy_quiescence_remaining(running_pids=fake_procs) == float(STEALTH_SWITCH_COOLDOWN_SECONDS)
+    assert get_agy_quiescence_remaining(running_pids=[]) == 0.0
 
 
 def test_quiescence_remaining_recent_process_kill() -> None:

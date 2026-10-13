@@ -320,12 +320,7 @@ def get_agy_quiescence_remaining(
     pids: list[int] = []
     if running_pids is not None:
         pids = running_pids
-    elif (
-        not _is_test_environment()
-        or os.getenv("ACS_TEST_REAL_PROCS") == "1"
-        or hasattr(get_external_agy_processes, "mock_calls")
-        or hasattr(get_external_agy_processes, "_mock_return_value")
-    ):
+    elif not _is_test_environment() or os.getenv("ACS_TEST_REAL_PROCS") == "1":
         pids = get_external_agy_processes()
 
     if pids:
@@ -406,22 +401,12 @@ def get_agy_quiescence_remaining(
             if brain_dir.is_dir():
                 try:
                     latest_mtime = max(latest_mtime, brain_dir.stat().st_mtime)
-                    for bp in brain_dir.rglob("*"):
-                        try:
-                            latest_mtime = max(latest_mtime, bp.stat().st_mtime)
-                        except OSError:
-                            pass
                 except OSError:
                     pass
             worktrees_dir = adir / "worktrees"
             if worktrees_dir.is_dir():
                 try:
                     latest_mtime = max(latest_mtime, worktrees_dir.stat().st_mtime)
-                    for wp in worktrees_dir.rglob("*"):
-                        try:
-                            latest_mtime = max(latest_mtime, wp.stat().st_mtime)
-                        except OSError:
-                            pass
                 except OSError:
                     pass
 

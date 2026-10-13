@@ -269,6 +269,8 @@ def rotate_after_failure_locked(
 
     should_enforce_cooldown = not _is_test_environment() or bool(os.getenv("ACS_ENFORCE_COOLDOWN"))
     cooldown_rem = get_switch_cooldown_remaining(state)
+    # running_pids=[]: failover evaluates quiescence from artifact mtimes / kill record;
+    # active processes are terminated immediately upon candidate selection.
     quiescence_rem = get_agy_quiescence_remaining(
         state=state, live_dir=get_live_dir(state), paths=paths, running_pids=[]
     )
