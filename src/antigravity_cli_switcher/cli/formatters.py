@@ -314,7 +314,10 @@ def _format_next_refresh(meta: dict, now: datetime) -> str:
         if delta.total_seconds() <= 0:
             return "due"
         return _format_natural_duration(delta.total_seconds())
-    policy = int(meta.get("refresh_policy_seconds", 0) or 0)
+    from antigravity_cli_switcher.manager.state import INELIGIBLE_REFRESH_INTERVAL_SECONDS
+
+    is_ineligible = meta.get("health_status") == "ineligible"
+    policy = INELIGIBLE_REFRESH_INTERVAL_SECONDS if is_ineligible else int(meta.get("refresh_policy_seconds", 0) or 0)
     if policy <= 0:
         return "-"
     last_check = _parse_iso_timestamp(meta.get("last_live_check_at"))

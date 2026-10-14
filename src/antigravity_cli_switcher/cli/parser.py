@@ -233,6 +233,7 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_all.add_argument(
         "--skip-exhausted", action="store_true", help="Skip accounts with 0% short window remaining"
     )
+    refresh_all.add_argument("--skip-ineligible", action="store_true", help="Skip accounts marked as ineligible")
     refresh_all.add_argument(
         "--backend", choices=["native", "http", "auto"], default=None, help="Quota polling backend (native/http/auto)"
     )

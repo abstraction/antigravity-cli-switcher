@@ -230,9 +230,12 @@ class DashboardScreen(DashboardActionsScreenBase):
     def _update_detail_from_selection(self, cooldown_remaining: float | None = None) -> None:
         if not self.snapshot:
             return
-        table = self.query_one("#account-table", AccountTable)
-        name = table.get_selected_account_name()
-        detail = self.query_one("#detail-panel", DetailPanel)
+        try:
+            table = self.query_one("#account-table", AccountTable)
+            name = table.get_selected_account_name()
+            detail = self.query_one("#detail-panel", DetailPanel)
+        except Exception:
+            return
         cooldown_rem = (
             cooldown_remaining if cooldown_remaining is not None else self.acs_app.get_switch_cooldown_remaining()
         )

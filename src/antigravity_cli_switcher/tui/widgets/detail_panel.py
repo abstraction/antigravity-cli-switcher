@@ -120,8 +120,11 @@ class DetailPanel(Widget):
         if not self.is_mounted:
             return
 
-        title_static = self.query_one("#detail-title", Static)
-        content_static = self.query_one("#detail-content", Static)
+        try:
+            title_static = self.query_one("#detail-title", Static)
+            content_static = self.query_one("#detail-content", Static)
+        except Exception:
+            return
 
         if not name or not meta:
             title_text = Text()
@@ -182,7 +185,10 @@ class DetailPanel(Widget):
         gemini_wk = self._render_quota_window(meta, "weekly", now, "gemini")
         other_5h = self._render_quota_window(meta, "short", now, "other")
         other_wk = self._render_quota_window(meta, "weekly", now, "other")
-        next_ref = f"{format_next_refresh(meta, now)} ({meta.refresh_policy_seconds}s)"
+        if meta.health_status == HealthStatus.INELIGIBLE or meta.stored_health_status == HealthStatus.INELIGIBLE:
+            next_ref = f"{format_next_refresh(meta, now)} (24h)"
+        else:
+            next_ref = f"{format_next_refresh(meta, now)} ({meta.refresh_policy_seconds}s)"
         mode_str = f"{meta.status} │ {'enabled' if meta.enabled else 'disabled'}"
         status_str = str(meta.health_status.value if hasattr(meta.health_status, "value") else meta.health_status)
 
@@ -306,7 +312,15 @@ class DetailPanel(Widget):
 
         if rec == "human_intervention":
             text.append("Action      : ", style="bold #dc4c4c")
-            text.append("Requires human intervention. Verify in browser or switch accounts.\n", style="bold #dc4c4c")
+            if meta.health_status == HealthStatus.INELIGIBLE or meta.stored_health_status == HealthStatus.INELIGIBLE:
+                text.append(
+                    "Requires human intervention (24h backoff). Verify in browser or switch accounts. Press [u] to force recheck.\n",
+                    style="bold #dc4c4c",
+                )
+            else:
+                text.append(
+                    "Requires human intervention. Verify in browser or switch accounts.\n", style="bold #dc4c4c"
+                )
         elif rec == "relogin":
             text.append("Action      : ", style="bold #9b82d4")
             text.append("Press [l] to relogin account.\n", style="bold #9b82d4")

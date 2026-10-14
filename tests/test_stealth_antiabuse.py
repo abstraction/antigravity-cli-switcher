@@ -78,23 +78,17 @@ def test_login_account_captures_and_restores_active_keyring_token(
 
     from antigravity_cli_switcher.manager import keyring as km
 
-    orig_warmup = km._isolated_keyring_warmup
-    warmup_captured_tokens: list[dict | None] = []
-
-    def tracking_warmup(home: Path):
-        warmup_captured_tokens.append(km._load_keyring_token())
-        return orig_warmup(home)
-
-    monkeypatch.setattr("antigravity_cli_switcher.manager.login._isolated_keyring_warmup", tracking_warmup)
     monkeypatch.setattr("os.isatty", lambda fd: True)
 
     captured_popen_envs: list[dict[str, str]] = []
+    keyring_state_during_popen: list[dict | None] = []
 
     def mock_popen(*args: object, **kwargs: object) -> mock.MagicMock:
         live_cwd = Path(str(kwargs.get("cwd", "")))
         env_arg = kwargs.get("env")
         if isinstance(env_arg, dict):
             captured_popen_envs.append(dict(env_arg))
+        keyring_state_during_popen.append(km._load_keyring_token())
         live_tok = live_cwd / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"
         live_tok.parent.mkdir(parents=True, exist_ok=True)
         live_tok.write_text(
@@ -118,9 +112,8 @@ def test_login_account_captures_and_restores_active_keyring_token(
         or "switcher" in captured_popen_envs[0]["HOME"]
     )
 
-    assert len(warmup_captured_tokens) == 1
-    assert warmup_captured_tokens[0] is not None
-    assert warmup_captured_tokens[0]["token"]["access_token"] == "ya29.active_token_preserved"
+    assert len(keyring_state_during_popen) == 1
+    assert keyring_state_during_popen[0] is None
 
     restored_raw = _IN_MEMORY_KEYRING.get((KEYRING_SERVICE, KEYRING_ACCOUNT))
     assert restored_raw is not None

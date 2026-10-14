@@ -387,3 +387,51 @@ def test_cli_refresh_all_with_backend_flag(mock_root: Path, monkeypatch: pytest.
     code = main(["--root", str(mock_root), "refresh-all", "--backend", "auto", "--json"])
     assert code == 0
     assert "auto" in called_backends
+
+
+def test_cli_refresh_all_with_skip_ineligible_flag(mock_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from antigravity_cli_switcher.manager.paths import ManagerPaths
+    from antigravity_cli_switcher.manager.quota import UsageRefreshResult
+
+    called_accounts: list[str] = []
+
+    def mock_refresh(
+        paths: ManagerPaths,
+        name: str | None = None,
+        agy_binary: str | None = None,
+        timeout_seconds: int = 30,
+        backend: str | None = None,
+    ) -> UsageRefreshResult:
+        if name:
+            called_accounts.append(name)
+        return UsageRefreshResult(
+            account=name or "active",
+            source_home="/tmp/home",
+            project_id=None,
+            plan_type="free",
+            prompt_credits_available=None,
+            prompt_credits_monthly=None,
+            short_usage_status="known",
+            short_usage_value=90.0,
+            short_reset_at=None,
+            weekly_usage_status="known",
+            weekly_usage_value=85.0,
+            weekly_reset_at=None,
+            usage_families={},
+            bucket_count=0,
+            backend=backend or "native",
+        )
+
+    monkeypatch.setattr("antigravity_cli_switcher.cli.refresh.refresh_account_usage", mock_refresh)
+
+    paths = build_paths(mock_root)
+    state = load_state(paths)
+    state["accounts"]["alpha"]["health_status"] = "ineligible"
+    state["accounts"]["alpha"]["last_live_check_error"] = "Account ineligible"
+    state["accounts"]["[2] beta"]["health_status"] = "ready"
+    save_state(paths, state)
+
+    code = main(["--root", str(mock_root), "refresh-all", "--skip-ineligible", "--json"])
+    assert code == 0
+    assert "[2] beta" in called_accounts
+    assert "alpha" not in called_accounts

@@ -86,6 +86,7 @@ def _run_agy_warmup(home_root: Path, agy_binary: str | None, timeout_seconds: in
     env["BROWSER"] = "false"
     env["DISPLAY"] = ""
     env["WAYLAND_DISPLAY"] = ""
+    env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/dev/null"
     try:
         proc = subprocess.run(
             [resolved_binary, "models"],

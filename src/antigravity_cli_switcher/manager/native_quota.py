@@ -22,6 +22,7 @@ def _fetch_native_quota(
     env["BROWSER"] = "false"
     env["DISPLAY"] = ""
     env["WAYLAND_DISPLAY"] = ""
+    env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/dev/null"
 
     with _isolated_keyring_warmup(source_home):
         try:

@@ -258,7 +258,7 @@ def _persist_refresh_failure(paths: ManagerPaths, name: str, error_message: str)
     from datetime import timedelta
 
     from antigravity_cli_switcher.manager.locking import manager_lock
-    from antigravity_cli_switcher.manager.state import save_state
+    from antigravity_cli_switcher.manager.state import INELIGIBLE_REFRESH_INTERVAL_SECONDS, save_state
 
     now_dt = utc_now()
     now_iso = now_dt.isoformat()
@@ -273,15 +273,16 @@ def _persist_refresh_failure(paths: ManagerPaths, name: str, error_message: str)
         meta["refresh_fail_count"] = fail_count
         policy_seconds = int(meta.get("refresh_policy_seconds", 300) or 300)
         delay_seconds = min(policy_seconds, 60 * (2 ** min(fail_count - 1, 3)))
-        meta["next_live_check_at"] = (now_dt + timedelta(seconds=max(60, delay_seconds))).isoformat()
         if "Token mismatch" in error_message:
             meta["health_status"] = "token_mismatch"
         elif "Duplicate token" in error_message:
             meta["health_status"] = "token_duplicate"
-        elif is_ineligible_error(error_message):
+        elif is_ineligible_error(error_message) or meta.get("health_status") == "ineligible":
             meta["health_status"] = "ineligible"
+            delay_seconds = INELIGIBLE_REFRESH_INTERVAL_SECONDS
         else:
             meta["health_status"] = "refresh_failed"
+        meta["next_live_check_at"] = (now_dt + timedelta(seconds=max(60, delay_seconds))).isoformat()
         save_state(paths, state)
 
 

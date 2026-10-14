@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from antigravity_cli_switcher.models import AccountMeta, ProblemStatus, UsageWindow
+from antigravity_cli_switcher.models import AccountMeta, HealthStatus, ProblemStatus, UsageWindow
 
 
 def parse_iso_timestamp(value: str | None) -> datetime | None:
@@ -152,7 +152,12 @@ def format_next_refresh(meta: AccountMeta, now: datetime) -> str:
             return "due"
         return format_natural_duration(delta)
 
-    policy = meta.refresh_policy_seconds
+    from antigravity_cli_switcher.manager.state import INELIGIBLE_REFRESH_INTERVAL_SECONDS
+
+    is_ineligible = (
+        meta.health_status == HealthStatus.INELIGIBLE or meta.stored_health_status == HealthStatus.INELIGIBLE
+    )
+    policy = INELIGIBLE_REFRESH_INTERVAL_SECONDS if is_ineligible else meta.refresh_policy_seconds
     if policy <= 0:
         return "-"
     last_check = parse_iso_timestamp(meta.last_live_check_at)

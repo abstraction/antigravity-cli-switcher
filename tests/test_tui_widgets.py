@@ -485,3 +485,5 @@ async def test_detail_panel_shows_human_intervention() -> None:
         assert "Requires human intervention" in text_str
         assert "Ineligible" in text_str or "ineligible" in text_str
         assert "human intervention" in text_str.lower()
+        assert "24h backoff" in text_str
+        assert "(24h)" in text_str

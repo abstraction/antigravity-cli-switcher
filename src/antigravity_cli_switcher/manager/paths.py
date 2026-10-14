@@ -339,8 +339,6 @@ def _copy_managed_profile_files(source: Path, target: Path) -> None:
 
 
 def _remove_managed_profile_files(target: Path) -> None:
-    import antigravity_cli_switcher.manager as manager_pkg
-
     target.mkdir(parents=True, exist_ok=True)
     for name in MANAGED_PROFILE_FILES:
         (target / name).unlink(missing_ok=True)
@@ -353,7 +351,6 @@ def _remove_managed_profile_files(target: Path) -> None:
 
     for legacy_name in ("google_accounts.json", "google_account_id", "oauth_creds.json"):
         (target / legacy_name).unlink(missing_ok=True)
-    manager_pkg._clear_keyring_token()
 
 
 def _copy_account_profile(source_dir: Path, target_home: Path) -> None:

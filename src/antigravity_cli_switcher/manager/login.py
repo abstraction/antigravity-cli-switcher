@@ -14,8 +14,11 @@ from antigravity_cli_switcher.manager.identity import (
     resolve_login_profile_identity,
 )
 from antigravity_cli_switcher.manager.keyring import (
+    _clear_keyring_token,
     _is_test_environment,
-    _isolated_keyring_warmup,
+    _load_keyring_token,
+    _save_keyring_token,
+    _sync_keyring_to_home,
 )
 from antigravity_cli_switcher.manager.locking import manager_lock
 from antigravity_cli_switcher.manager.paths import (
@@ -58,14 +61,8 @@ def login_account(
     timeout_seconds: int = 600,
     overwrite_existing: bool = False,
 ) -> str | None:
-    from antigravity_cli_switcher.manager.accounts import (
-        _copy_active_runtime,
-        _sync_runtime_to_live_dir,
-    )
-    from antigravity_cli_switcher.manager.profiles import (
-        resolve_account_name,
-        save_account_profile,
-    )
+    from antigravity_cli_switcher.manager.accounts import _copy_active_runtime, _sync_runtime_to_live_dir
+    from antigravity_cli_switcher.manager.profiles import resolve_account_name, save_account_profile
 
     if not name.strip():
         raise ValueError("Account name cannot be empty.")
@@ -86,75 +83,80 @@ def login_account(
         resolved_name = resolve_account_name(state, name)
         storage_name = normalize_account_storage_name(resolved_name)
 
+    stashed_active_token: dict | None = None
     try:
         runtime_home = resolve_runtime_home(live_dir)
         runtime_home.mkdir(parents=True, exist_ok=True)
+
+        stashed_active_token = _load_keyring_token()
+        _clear_keyring_token()
+        _remove_managed_profile_files(live_dir)
+
+        # If relogging into an existing account, pre-seed its established identity
+        # files into live_dir so agy reuses them instead of generating a new Install ID.
+        target = account_dir(paths, storage_name)
+        if target.is_dir():
+            target_profile = _resolve_profile_source(target)
+            ensure_account_identity_files(target_profile)
+            for ident_file in (
+                "antigravity-cli/installation_id",
+                "installation_id",
+                "antigravity-cli/jetski_state.pbtxt",
+            ):
+                src = target_profile / ident_file
+                if src.is_file():
+                    dst = live_dir / ident_file
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
+
+        print("\n" + "=" * 54)
+        print(" Antigravity CLI Switcher (acs) - Login Session")
+        print(f" Target Account: {name}")
+        print("=" * 54)
+        print(" 1. Complete onboarding/login in your browser.")
+        print(" 2. Once authenticated, exit agy (/exit or Ctrl+D)")
+        print("    to return to the switcher.")
+        print("=" * 54 + "\n", flush=True)
+
         env = os.environ.copy()
         env["HOME"] = str(runtime_home)
 
-        with _isolated_keyring_warmup(runtime_home):
-            _remove_managed_profile_files(live_dir)
+        try:
+            proc = subprocess.Popen(
+                [resolved_binary],
+                stdin=sys.stdin,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                cwd=runtime_home,
+                env=env,
+                close_fds=True,
+            )
+        except FileNotFoundError as exc:
+            raise ValueError(f"agy binary not found: {resolved_binary}") from exc
 
-            # If relogging into an existing account, pre-seed its established identity
-            # files into live_dir so agy reuses them instead of generating a new Install ID.
-            target = account_dir(paths, storage_name)
-            if target.is_dir():
-                target_profile = _resolve_profile_source(target)
-                ensure_account_identity_files(target_profile)
-                for ident_file in (
-                    "antigravity-cli/installation_id",
-                    "installation_id",
-                    "antigravity-cli/jetski_state.pbtxt",
-                ):
-                    src = target_profile / ident_file
-                    if src.is_file():
-                        dst = live_dir / ident_file
-                        dst.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(src, dst)
-
-            print("\n" + "=" * 54)
-            print(" Antigravity CLI Switcher (acs) - Login Session")
-            print(f" Target Account: {name}")
-            print("=" * 54)
-            print(" 1. Complete onboarding/login in your browser.")
-            print(" 2. Once authenticated, exit agy (/exit or Ctrl+D)")
-            print("    to return to the switcher.")
-            print("=" * 54 + "\n", flush=True)
-
-            try:
-                proc = subprocess.Popen(
-                    [resolved_binary],
-                    stdin=sys.stdin,
-                    stdout=sys.stdout,
-                    stderr=sys.stderr,
-                    cwd=runtime_home,
-                    env=env,
-                    close_fds=True,
-                )
-            except FileNotFoundError as exc:
-                raise ValueError(f"agy binary not found: {resolved_binary}") from exc
-
-            start_time = time.time()
-            try:
-                while True:
-                    if proc.poll() is not None:
-                        break
-                    if time.time() - start_time > timeout_seconds:
-                        proc.terminate()
-                        try:
-                            proc.wait(timeout=3)
-                        except subprocess.TimeoutExpired:
-                            proc.kill()
-                        raise ValueError(f"Login timed out after {timeout_seconds} seconds.")
-                    time.sleep(0.1)
-            except KeyboardInterrupt:
-                if proc.poll() is None:
+        start_time = time.time()
+        try:
+            while True:
+                if proc.poll() is not None:
+                    break
+                if time.time() - start_time > timeout_seconds:
                     proc.terminate()
                     try:
                         proc.wait(timeout=3)
                     except subprocess.TimeoutExpired:
                         proc.kill()
-                raise
+                    raise ValueError(f"Login timed out after {timeout_seconds} seconds.")
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+            raise
+
+        _sync_keyring_to_home(runtime_home)
 
         if not live_dir.is_dir() or not profile_has_login_artifacts(live_dir):
             raise ValueError("agy login did not produce a usable auth profile.")
@@ -197,31 +199,24 @@ def login_account(
             print(f"\n[WARNING] Account '{colliding_account}' is already using email '{detected_email}'!")
             print("This token appears to belong to an existing account, not a new one.")
 
-        if "@" in resolved_name and detected_email and resolved_name.strip().lower() != str(detected_email).lower():
-            print(
-                f"\n[WARNING] Target account name is '{resolved_name}', but the logged-in token is for '{detected_email}'!"
-            )
-
-        has_warning = bool(colliding_account) or bool(
+        name_mismatch = bool(
             "@" in resolved_name and detected_email and resolved_name.strip().lower() != str(detected_email).lower()
         )
+        if name_mismatch:
+            print(f"\n[WARNING] Target account name is '{resolved_name}', but token is for '{detected_email}'!")
+        has_warning = bool(colliding_account) or name_mismatch
 
         if overwrite_existing and not has_warning:
             print(f"\n[acs] Verified token for '{resolved_name}' ({detected_email or 'ok'}). Saving profile...")
         else:
-            confirm_prompt = f"\nConfirm saving token for account '{resolved_name}'? [Y/n]: "
-            confirm_ans = input(confirm_prompt).strip().lower()
+            confirm_ans = input(f"\nConfirm saving token for account '{resolved_name}'? [Y/n]: ").strip().lower()
             if confirm_ans in {"n", "no"}:
                 print("Login cancelled. Token discarded and active account restored.")
                 return None
 
-        overwrite = False
-        if overwrite_existing:
-            overwrite = True
-        elif account_dir(paths, storage_name).exists():
-            prompt = f"Account '{storage_name}' already exists. Overwrite it? [Y/n]: "
-            answer = input(prompt).strip().lower()
-            if answer in {"n", "no"}:
+        overwrite = overwrite_existing
+        if not overwrite and account_dir(paths, storage_name).exists():
+            if input(f"Account '{storage_name}' already exists. Overwrite it? [Y/n]: ").strip().lower() in {"n", "no"}:
                 storage_name = next_available_account_name(paths, storage_name)
                 print(f"saving-as: {storage_name}")
             else:
@@ -246,3 +241,5 @@ def login_account(
                     _sync_runtime_to_live_dir(paths, state)
                 except Exception:
                     pass
+            elif stashed_active_token:
+                _save_keyring_token(stashed_active_token)

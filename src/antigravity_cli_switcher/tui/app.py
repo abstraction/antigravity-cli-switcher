@@ -212,6 +212,7 @@ class ACSApp(App[int]):
             self.post_dashboard_message(
                 StatusMessage(f"Quota check failed for {account_name}: {exc}", worker_status="ERROR")
             )
+            self.refresh_snapshot()
         finally:
             self._refreshing_accounts.discard(account_name)
 

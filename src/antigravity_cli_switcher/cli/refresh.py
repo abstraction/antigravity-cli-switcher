@@ -140,6 +140,16 @@ def cmd_refresh_all(paths: ManagerPaths, args: argparse.Namespace) -> int:
                         if not args.json:
                             print(f"skip [{name}]: short window exhausted (0%)")
                         continue
+        if getattr(args, "skip_ineligible", False):
+            from antigravity_cli_switcher.manager.verification import is_ineligible_error
+
+            health = meta.get("health_status")
+            err = meta.get("last_live_check_error")
+            if health == "ineligible" or is_ineligible_error(err):
+                skipped.append({"account": name, "reason": "ineligible"})
+                if not args.json:
+                    print(f"skip [{name}]: ineligible (human intervention needed)")
+                continue
         to_refresh.append(name)
 
     results: list[dict] = []

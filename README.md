@@ -8,7 +8,7 @@
   </p>
   <p>Active-standby account manager and quota failover switcher for Antigravity CLI on Linux</p>
   <p>
-    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-388%20passed-2ea043" alt="Tests"></a>
+    <a href="https://github.com/abstraction/antigravity-cli-switcher/actions"><img src="https://img.shields.io/badge/tests-391%20passed-2ea043" alt="Tests"></a>
     <img src="https://img.shields.io/badge/agy-v1.3.3-4285f4" alt="agy version">
     <a href="https://github.com/abstraction/antigravity-cli-switcher"><img src="https://img.shields.io/badge/python-3.10+-3776ab" alt="Python"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
@@ -282,7 +282,7 @@ acs refresh-due
 acs refresh-due --backend auto
 
 # Sequentially refresh all accounts with delay between requests
-acs refresh-all --delay-seconds 2.0 --skip-exhausted --skip-disabled
+acs refresh-all --delay-seconds 2.0 --skip-exhausted --skip-disabled --skip-ineligible
 ```
 
 ### Architecture and telemetry mechanics

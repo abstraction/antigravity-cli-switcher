@@ -26,6 +26,7 @@ from antigravity_cli_switcher.manager.policy import (
 )
 from antigravity_cli_switcher.manager.state import (
     DEFAULT_REFRESH_POLICY_SECONDS,
+    INELIGIBLE_REFRESH_INTERVAL_SECONDS,
     _normalize_usage_family,
     load_state,
     parse_timestamp,
@@ -74,6 +75,21 @@ def _account_due_for_refresh(meta: dict, now: datetime | None = None) -> bool:
     health_status = meta.get("health_status")
     if health_status in {"token_stale", "quota_stale"}:
         return True
+
+    from antigravity_cli_switcher.manager.verification import is_ineligible_error
+
+    is_ineligible = health_status == "ineligible" or is_ineligible_error(meta.get("last_live_check_error"))
+    if is_ineligible:
+        last_check = parse_timestamp(meta.get("last_live_check_at"))
+        if last_check is not None and last_check + timedelta(seconds=INELIGIBLE_REFRESH_INTERVAL_SECONDS) > current:
+            return False
+        next_check = parse_timestamp(meta.get("next_live_check_at"))
+        if next_check is not None:
+            return next_check <= current
+        if last_check is None:
+            return True
+        return last_check + timedelta(seconds=INELIGIBLE_REFRESH_INTERVAL_SECONDS) <= current
+
     next_check = parse_timestamp(meta.get("next_live_check_at"))
     if next_check is not None:
         return next_check <= current

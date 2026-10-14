@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from antigravity_cli_switcher import manager as m
+from antigravity_cli_switcher.manager.state import parse_timestamp, utc_now
 
 TOKEN_PATH = Path(".gemini/antigravity-cli/antigravity-oauth-token")
 
@@ -387,3 +388,81 @@ class ManagerRegressionTests(unittest.TestCase):
         meta = state["accounts"]["a"]
         self.assertEqual(meta["health_status"], "ineligible")
         self.assertIn("Eligibility check failed", meta["last_live_check_error"])
+        next_check = parse_timestamp(meta["next_live_check_at"])
+        assert next_check is not None
+        self.assertGreaterEqual((next_check - utc_now()).total_seconds(), 86300)
+
+    def test_ineligible_account_refresh_due_backoff(self) -> None:
+        from datetime import timedelta
+
+        self.add("a")
+        now = utc_now()
+        state = m.load_state(self.paths)
+        state["accounts"]["a"]["health_status"] = "ineligible"
+        state["accounts"]["a"]["last_live_check_at"] = (now - timedelta(hours=1)).isoformat()
+        state["accounts"]["a"]["next_live_check_at"] = (now + timedelta(hours=23)).isoformat()
+        m.save_state(self.paths, state)
+
+        # 1 hour after check -> NOT due
+        self.assertFalse(m.routing._account_due_for_refresh(state["accounts"]["a"], now))
+        self.assertIsNone(m.pick_due_refresh_account(self.paths))
+
+        # Check with last check 25 hours ago -> IS due
+        state["accounts"]["a"]["last_live_check_at"] = (now - timedelta(hours=25)).isoformat()
+        state["accounts"]["a"]["next_live_check_at"] = (now - timedelta(hours=1)).isoformat()
+        m.save_state(self.paths, state)
+        self.assertTrue(m.routing._account_due_for_refresh(state["accounts"]["a"], now))
+        self.assertEqual(m.pick_due_refresh_account(self.paths), "a")
+
+    def test_refresh_all_skips_ineligible(self) -> None:
+        import argparse
+        from io import StringIO
+        from unittest.mock import patch
+
+        from antigravity_cli_switcher.cli.refresh import cmd_refresh_all
+
+        self.add("a")
+        self.add("b")
+        state = m.load_state(self.paths)
+        state["accounts"]["a"]["health_status"] = "ineligible"
+        state["accounts"]["a"]["last_live_check_error"] = "Account ineligible"
+        state["accounts"]["b"]["health_status"] = "ready"
+        m.save_state(self.paths, state)
+
+        args = argparse.Namespace(
+            include=None,
+            exclude=None,
+            skip_disabled=False,
+            skip_exhausted=False,
+            skip_ineligible=True,
+            delay_seconds=0.0,
+            json=True,
+            agy_binary=None,
+            warmup_timeout_seconds=5,
+            backend="http",
+        )
+        with (
+            patch("antigravity_cli_switcher.cli.refresh.refresh_account_usage") as mock_ref,
+            patch("sys.stdout", new_callable=StringIO),
+        ):
+            mock_ref.return_value = mock.MagicMock(
+                account="b",
+                backend="http",
+                plan_type="free",
+                project_id=None,
+                prompt_credits_available=None,
+                prompt_credits_monthly=None,
+                source_home="/tmp/home",
+                short_usage_value=100.0,
+                short_usage_status="ok",
+                short_reset_at=None,
+                weekly_usage_value=100.0,
+                weekly_usage_status="ok",
+                weekly_reset_at=None,
+                usage_families={},
+                bucket_count=1,
+            )
+            exit_code = cmd_refresh_all(self.paths, args)
+            self.assertEqual(exit_code, 0)
+            mock_ref.assert_called_once()
+            self.assertEqual(mock_ref.call_args[0][1], "b")

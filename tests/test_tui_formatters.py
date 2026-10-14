@@ -115,6 +115,16 @@ class TUIFormattersTests(unittest.TestCase):
         )
         self.assertEqual(format_next_refresh(meta_disabled, now), "-")
 
+        # Ineligible account falls back to 24 hours (86400s)
+        from antigravity_cli_switcher.models import HealthStatus
+
+        meta_ineligible = AccountMeta(
+            health_status=HealthStatus.INELIGIBLE,
+            last_live_check_at="2026-01-01T11:00:00+00:00",
+            refresh_policy_seconds=300,
+        )
+        self.assertEqual(format_next_refresh(meta_ineligible, now), "23h")
+
     def test_format_meter_bar(self) -> None:
         self.assertEqual(format_meter_bar(None), "[     ]")
         self.assertEqual(format_meter_bar(0), "[     ]")
