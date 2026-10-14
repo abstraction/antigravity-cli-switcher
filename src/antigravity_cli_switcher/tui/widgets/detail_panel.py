@@ -191,7 +191,14 @@ class DetailPanel(Widget):
         gemini_wk = self._render_quota_window(meta, "weekly", now, "gemini")
         other_5h = self._render_quota_window(meta, "short", now, "other")
         other_wk = self._render_quota_window(meta, "weekly", now, "other")
-        if meta.health_status == HealthStatus.INELIGIBLE or meta.stored_health_status == HealthStatus.INELIGIBLE:
+        from antigravity_cli_switcher.manager.verification import is_ineligible_error
+
+        is_ineligible = (
+            meta.health_status == HealthStatus.INELIGIBLE
+            or meta.stored_health_status == HealthStatus.INELIGIBLE
+            or is_ineligible_error(meta.last_live_check_error)
+        )
+        if is_ineligible:
             next_ref = f"{format_next_refresh(meta, now, queue_item=self._last_queue_item)} (24h)"
         else:
             next_ref = (

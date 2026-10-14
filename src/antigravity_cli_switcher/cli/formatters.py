@@ -308,6 +308,8 @@ def _format_next_refresh(meta: dict, now: datetime) -> str:
     status = meta.get("status") or "standby"
     if not meta.get("enabled", True) or status in {"disabled", "cooldown"}:
         return "-"
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
     next_check = _parse_iso_timestamp(meta.get("next_live_check_at"))
     if next_check is not None:
         delta = next_check - now
@@ -315,9 +317,35 @@ def _format_next_refresh(meta: dict, now: datetime) -> str:
             return "due"
         return _format_natural_duration(delta.total_seconds())
     from antigravity_cli_switcher.manager.state import INELIGIBLE_REFRESH_INTERVAL_SECONDS
+    from antigravity_cli_switcher.manager.verification import is_ineligible_error
 
-    is_ineligible = meta.get("health_status") == "ineligible"
-    policy = INELIGIBLE_REFRESH_INTERVAL_SECONDS if is_ineligible else int(meta.get("refresh_policy_seconds", 0) or 0)
+    health = meta.get("health_status")
+    stored_health = meta.get("stored_health_status") or health
+    is_ineligible = (
+        health == "ineligible"
+        or stored_health == "ineligible"
+        or is_ineligible_error(meta.get("last_live_check_error"))
+    )
+    if is_ineligible:
+        last_check = _parse_iso_timestamp(meta.get("last_live_check_at"))
+        if last_check is None:
+            return "due"
+        due_at = last_check + timedelta(seconds=INELIGIBLE_REFRESH_INTERVAL_SECONDS)
+        delta = due_at - now
+        if delta.total_seconds() <= 0:
+            return "due"
+        return _format_natural_duration(delta.total_seconds())
+
+    short_win = (meta.get("usage_windows") or {}).get("short") if isinstance(meta.get("usage_windows"), dict) else None
+    if isinstance(short_win, dict):
+        short_val = short_win.get("value")
+        if isinstance(short_val, (int, float)) and short_val <= 0:
+            short_reset = _parse_iso_timestamp(short_win.get("reset_at"))
+            if short_reset is not None and short_reset > now:
+                delta = short_reset - now
+                return _format_natural_duration(delta.total_seconds())
+
+    policy = int(meta.get("refresh_policy_seconds", 0) or 0)
     if policy <= 0:
         return "-"
     last_check = _parse_iso_timestamp(meta.get("last_live_check_at"))

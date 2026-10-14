@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from antigravity_cli_switcher.manager.candidates import (
@@ -74,12 +74,17 @@ def _account_due_for_refresh(meta: dict, now: datetime | None = None) -> bool:
     if status in {"disabled", "cooldown"}:
         return False
     health_status = meta.get("health_status")
-    if health_status in {"token_stale", "quota_stale"}:
+    stored_health = meta.get("stored_health_status") or health_status
+    if health_status in {"token_stale", "quota_stale"} or stored_health in {"token_stale", "quota_stale"}:
         return True
 
     from antigravity_cli_switcher.manager.verification import is_ineligible_error
 
-    is_ineligible = health_status == "ineligible" or is_ineligible_error(meta.get("last_live_check_error"))
+    is_ineligible = (
+        health_status == "ineligible"
+        or stored_health == "ineligible"
+        or is_ineligible_error(meta.get("last_live_check_error"))
+    )
     if is_ineligible:
         last_check = parse_timestamp(meta.get("last_live_check_at"))
         if last_check is not None and last_check + timedelta(seconds=INELIGIBLE_REFRESH_INTERVAL_SECONDS) > current:
@@ -212,7 +217,10 @@ def pick_due_refresh_account(paths: ManagerPaths, exclude: set[str] | None = Non
         if last_global_iso:
             try:
                 last_global = datetime.fromisoformat(last_global_iso)
-                if (now - last_global).total_seconds() < BACKGROUND_REFRESH_PACING_SECONDS:
+                if last_global.tzinfo is None:
+                    last_global = last_global.replace(tzinfo=timezone.utc)
+                diff = (now - last_global).total_seconds()
+                if -BACKGROUND_REFRESH_PACING_SECONDS <= diff < BACKGROUND_REFRESH_PACING_SECONDS:
                     return None
             except ValueError:
                 pass
@@ -434,7 +442,18 @@ def refresh_due_account(
 ) -> UsageRefreshResult | None:
     from antigravity_cli_switcher.manager.quota import refresh_account_usage
 
-    account_name = target if target is not None else pick_due_refresh_account(paths)
+    account_name: str | None
+    if target is not None:
+        account_name = target
+        with manager_lock(paths):
+            state = sync_state_from_disk(paths, load_state(paths))
+            state["last_background_refresh_at"] = utc_now().isoformat()
+            from antigravity_cli_switcher.manager.state import save_state
+
+            save_state(paths, state)
+    else:
+        account_name = pick_due_refresh_account(paths)
+
     if not account_name:
         return None
     return refresh_account_usage(

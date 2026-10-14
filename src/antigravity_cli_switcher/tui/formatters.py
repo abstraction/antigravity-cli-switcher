@@ -147,12 +147,17 @@ def format_countdown(meta: AccountMeta, now: datetime) -> str:
     return f"{_format_reset_compact(short_fallback, now)}/{_format_reset_compact(weekly_fallback, now)}"
 
 
-def is_account_due_for_refresh(meta: AccountMeta, now: datetime) -> bool:
-    """Determine whether an account is currently due for a background refresh."""
+def get_next_refresh_time(meta: AccountMeta) -> datetime | None:
+    """Calculate scheduled next refresh datetime for an account.
+
+    Returns None if the account is disabled, in cooldown, or immediately due without a future target.
+    """
     if not meta.enabled or meta.status in {"disabled", "cooldown"}:
-        return False
-    if meta.health_status in (HealthStatus.TOKEN_STALE, HealthStatus.QUOTA_STALE):
-        return True
+        return None
+
+    next_check = parse_iso_timestamp(meta.next_live_check_at)
+    if next_check is not None:
+        return next_check
 
     from antigravity_cli_switcher.manager.state import INELIGIBLE_REFRESH_INTERVAL_SECONDS
     from antigravity_cli_switcher.manager.verification import is_ineligible_error
@@ -164,33 +169,42 @@ def is_account_due_for_refresh(meta: AccountMeta, now: datetime) -> bool:
     )
     if is_ineligible:
         last_check = parse_iso_timestamp(meta.last_live_check_at)
-        if last_check is not None and last_check + timedelta(seconds=INELIGIBLE_REFRESH_INTERVAL_SECONDS) > now:
-            return False
-        next_check = parse_iso_timestamp(meta.next_live_check_at)
-        if next_check is not None:
-            return next_check <= now
         if last_check is None:
-            return True
-        return last_check + timedelta(seconds=INELIGIBLE_REFRESH_INTERVAL_SECONDS) <= now
-
-    next_check = parse_iso_timestamp(meta.next_live_check_at)
-    if next_check is not None:
-        return next_check <= now
+            return None
+        return last_check + timedelta(seconds=INELIGIBLE_REFRESH_INTERVAL_SECONDS)
 
     short_window = meta.usage_windows.get("short")
     if short_window and short_window.value is not None and short_window.value <= 0:
         short_reset = parse_iso_timestamp(short_window.reset_at)
-        if short_reset and short_reset > now:
-            return False
+        if short_reset is not None:
+            return short_reset
 
     policy = meta.refresh_policy_seconds
     if policy <= 0:
-        return False
+        return None
     last_check = parse_iso_timestamp(meta.last_live_check_at)
     if last_check is None:
+        return None
+    return last_check + timedelta(seconds=policy)
+
+
+def is_account_due_for_refresh(meta: AccountMeta, now: datetime) -> bool:
+    """Determine whether an account is currently due for a background refresh."""
+    if not meta.enabled or meta.status in {"disabled", "cooldown"}:
+        return False
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    if meta.health_status in (HealthStatus.TOKEN_STALE, HealthStatus.QUOTA_STALE) or meta.stored_health_status in (
+        HealthStatus.TOKEN_STALE,
+        HealthStatus.QUOTA_STALE,
+    ):
         return True
-    due_at = last_check + timedelta(seconds=policy)
-    return due_at <= now
+
+    next_time = get_next_refresh_time(meta)
+    if next_time is None:
+        policy = meta.refresh_policy_seconds
+        return policy > 0 or meta.last_live_check_at is None
+    return next_time <= now
 
 
 def compute_refresh_queue(
@@ -201,6 +215,8 @@ def compute_refresh_queue(
     pacing_seconds: int = BACKGROUND_REFRESH_PACING_SECONDS,
 ) -> dict[str, RefreshQueueItem]:
     """Compute estimated queue position and pacing ETA for all due accounts."""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
     due_accounts: list[str] = []
 
     if active_name and active_name in accounts:
@@ -218,7 +234,7 @@ def compute_refresh_queue(
         last_bg = parse_iso_timestamp(last_background_refresh_at)
         if last_bg:
             elapsed = (now - last_bg).total_seconds()
-            cooldown_rem = max(0, int(pacing_seconds - elapsed))
+            cooldown_rem = min(pacing_seconds, max(0, int(pacing_seconds - elapsed)))
 
     queue: dict[str, RefreshQueueItem] = {}
     for idx, name in enumerate(due_accounts):
@@ -240,29 +256,14 @@ def format_next_refresh(
     """Format countdown until next scheduled background live check with queue transparency."""
     if not meta.enabled or meta.status in {"disabled", "cooldown"}:
         return "-"
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
 
     if not is_account_due_for_refresh(meta, now):
-        check_str = meta.next_live_check_at
-        next_check = parse_iso_timestamp(check_str)
-        if next_check is not None:
-            delta = int((next_check - now).total_seconds())
-            if delta <= 0:
-                return "due"
-            return format_natural_duration(delta)
-
-        from antigravity_cli_switcher.manager.state import INELIGIBLE_REFRESH_INTERVAL_SECONDS
-
-        is_ineligible = (
-            meta.health_status == HealthStatus.INELIGIBLE or meta.stored_health_status == HealthStatus.INELIGIBLE
-        )
-        policy = INELIGIBLE_REFRESH_INTERVAL_SECONDS if is_ineligible else meta.refresh_policy_seconds
-        if policy <= 0:
+        next_time = get_next_refresh_time(meta)
+        if next_time is None:
             return "-"
-        last_check = parse_iso_timestamp(meta.last_live_check_at)
-        if last_check is None:
-            return "due"
-        due_at = last_check + timedelta(seconds=policy)
-        delta = int((due_at - now).total_seconds())
+        delta = int((next_time - now).total_seconds())
         if delta <= 0:
             return "due"
         return format_natural_duration(delta)
