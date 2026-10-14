@@ -25,6 +25,7 @@ from antigravity_cli_switcher.manager.policy import (
     get_switch_mode,
 )
 from antigravity_cli_switcher.manager.state import (
+    BACKGROUND_REFRESH_PACING_SECONDS,
     DEFAULT_REFRESH_POLICY_SECONDS,
     INELIGIBLE_REFRESH_INTERVAL_SECONDS,
     _normalize_usage_family,
@@ -211,7 +212,7 @@ def pick_due_refresh_account(paths: ManagerPaths, exclude: set[str] | None = Non
         if last_global_iso:
             try:
                 last_global = datetime.fromisoformat(last_global_iso)
-                if (now - last_global).total_seconds() < 35:
+                if (now - last_global).total_seconds() < BACKGROUND_REFRESH_PACING_SECONDS:
                     return None
             except ValueError:
                 pass
@@ -429,15 +430,16 @@ def refresh_due_account(
     agy_binary: str | None = None,
     timeout_seconds: int = 30,
     backend: str | None = None,
+    target: str | None = None,
 ) -> UsageRefreshResult | None:
     from antigravity_cli_switcher.manager.quota import refresh_account_usage
 
-    target = pick_due_refresh_account(paths)
-    if not target:
+    account_name = target if target is not None else pick_due_refresh_account(paths)
+    if not account_name:
         return None
     return refresh_account_usage(
         paths,
-        name=target,
+        name=account_name,
         agy_binary=agy_binary,
         timeout_seconds=timeout_seconds,
         backend=backend,

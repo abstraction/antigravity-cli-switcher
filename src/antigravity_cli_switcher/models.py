@@ -330,3 +330,13 @@ class FleetUtilizationState(BaseModel):
     last_active_account: str = ""
     last_active_switched_at: str = ""
     daily_peak_burst: dict[str, int] = Field(default_factory=dict)
+
+
+class RefreshQueueItem(BaseModel):
+    """Estimated queue position and ETA for an account in the pacing queue."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    account: str
+    position: int
+    eta_seconds: int

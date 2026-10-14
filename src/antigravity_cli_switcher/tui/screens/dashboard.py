@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, ClassVar
 
 from textual.app import ComposeResult
@@ -14,6 +15,7 @@ from antigravity_cli_switcher.models import (
     SnapshotVerification,
     StatusSnapshot,
 )
+from antigravity_cli_switcher.tui.formatters import compute_refresh_queue
 from antigravity_cli_switcher.tui.messages import SnapshotUpdated, StatusMessage
 from antigravity_cli_switcher.tui.modals import HelpModal
 from antigravity_cli_switcher.tui.screens.dashboard_actions import DashboardActionsScreenBase
@@ -247,7 +249,14 @@ class DashboardScreen(DashboardActionsScreenBase):
                 if self.snapshot.fleet_utilization and name in self.snapshot.fleet_utilization.accounts
                 else None
             )
-            detail.update_detail(name, meta, ver, util, cooldown_remaining=cooldown_rem)
+            refresh_queue = compute_refresh_queue(
+                self.snapshot.accounts,
+                self.snapshot.active,
+                datetime.now(timezone.utc),
+                last_background_refresh_at=self.snapshot.last_background_refresh_at,
+            )
+            q_item = refresh_queue.get(name)
+            detail.update_detail(name, meta, ver, util, cooldown_remaining=cooldown_rem, queue_item=q_item)
         else:
             detail.update_detail(None, None, None, None, cooldown_remaining=cooldown_rem)
 

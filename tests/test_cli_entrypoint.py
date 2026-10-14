@@ -384,7 +384,7 @@ def test_cli_refresh_all_with_backend_flag(mock_root: Path, monkeypatch: pytest.
     state["accounts"]["test_account"] = {"enabled": True, "status": "standby"}
     save_state(paths, state)
 
-    code = main(["--root", str(mock_root), "refresh-all", "--backend", "auto", "--json"])
+    code = main(["--root", str(mock_root), "refresh-all", "--backend", "auto", "--json", "--delay-seconds", "0.0"])
     assert code == 0
     assert "auto" in called_backends
 
@@ -435,3 +435,74 @@ def test_cli_refresh_all_with_skip_ineligible_flag(mock_root: Path, monkeypatch:
     assert code == 0
     assert "[2] beta" in called_accounts
     assert "alpha" not in called_accounts
+
+
+def test_cli_refresh_due_no_governor_deadlock(
+    mock_root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from antigravity_cli_switcher.manager.paths import build_paths
+    from antigravity_cli_switcher.manager.quota import UsageRefreshResult
+    from antigravity_cli_switcher.manager.state import load_state, save_state
+
+    refreshed: list[str] = []
+
+    def mock_refresh_account_usage(paths, name, agy_binary=None, timeout_seconds=30, backend=None):
+        refreshed.append(name)
+        return UsageRefreshResult(
+            account=name,
+            source_home=str(paths.root),
+            project_id=None,
+            plan_type="free",
+            prompt_credits_available=None,
+            prompt_credits_monthly=None,
+            short_usage_status="known",
+            short_usage_value=85.0,
+            short_reset_at=None,
+            weekly_usage_status="known",
+            weekly_usage_value=80.0,
+            weekly_reset_at=None,
+            usage_families={},
+            bucket_count=0,
+            backend=backend or "http",
+        )
+
+    monkeypatch.setattr("antigravity_cli_switcher.manager.quota.refresh_account_usage", mock_refresh_account_usage)
+
+    paths = build_paths(mock_root)
+    state = load_state(paths)
+    state["accounts"]["alpha"]["next_live_check_at"] = "2020-01-01T00:00:00+00:00"
+    state["accounts"]["[2] beta"]["next_live_check_at"] = "2030-01-01T00:00:00+00:00"
+    save_state(paths, state)
+
+    # First run should pick and refresh alpha without double-pick deadlock
+    code1 = main(["--root", str(mock_root), "refresh-due", "--json"])
+    assert code1 == 0
+    out1 = capsys.readouterr().out
+    import json
+
+    data1 = json.loads(out1)
+    assert data1["refreshed"] is True
+    assert data1["account"] == "alpha"
+    assert len(refreshed) == 1
+
+    # Second consecutive run immediately afterwards is throttled by the 35s governor
+    code2 = main(["--root", str(mock_root), "refresh-due", "--json"])
+    assert code2 == 0
+    out2 = capsys.readouterr().out
+    data2 = json.loads(out2)
+    assert data2["refreshed"] is False
+    assert data2["reason"] == "no_due_account"
+    assert len(refreshed) == 1
+
+
+def test_cli_refresh_all_delay_seconds_parity() -> None:
+    from antigravity_cli_switcher.cli.parser import build_parser
+
+    parser = build_parser()
+    # Default is 35.0s
+    args_default = parser.parse_args(["refresh-all"])
+    assert args_default.delay_seconds == 35.0
+
+    # Explicit override allowed
+    args_custom = parser.parse_args(["refresh-all", "--delay-seconds", "5.0"])
+    assert args_custom.delay_seconds == 5.0

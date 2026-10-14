@@ -7,9 +7,12 @@ import time
 from antigravity_cli_switcher.manager import (
     ManagerPaths,
     get_status_snapshot,
-    pick_due_refresh_account,
+    load_state,
+    manager_lock,
     refresh_account_usage,
     refresh_due_account,
+    save_state,
+    utc_now,
 )
 
 
@@ -54,7 +57,6 @@ def cmd_refresh_usage(paths: ManagerPaths, args: argparse.Namespace) -> int:
 
 
 def cmd_refresh_due(paths: ManagerPaths, args: argparse.Namespace) -> int:
-    candidate = pick_due_refresh_account(paths)
     due_res = refresh_due_account(
         paths,
         agy_binary=args.agy_binary,
@@ -71,7 +73,7 @@ def cmd_refresh_due(paths: ManagerPaths, args: argparse.Namespace) -> int:
     due_payload = {
         "refreshed": True,
         "account": due_res.account,
-        "requested_account": candidate,
+        "requested_account": due_res.account,
         "source_home": due_res.source_home,
         "project_id": due_res.project_id,
         "plan_type": due_res.plan_type,
@@ -155,10 +157,11 @@ def cmd_refresh_all(paths: ManagerPaths, args: argparse.Namespace) -> int:
     results: list[dict] = []
     errors: list[dict] = []
     for idx, name in enumerate(to_refresh):
-        if idx > 0 and args.delay_seconds > 0:
+        delay = float(getattr(args, "delay_seconds", 35.0))
+        if idx > 0 and delay > 0:
             if not args.json:
-                print(f"  waiting {args.delay_seconds:.0f}s...", flush=True)
-            time.sleep(args.delay_seconds)
+                print(f"  waiting {delay:.0f}s...", flush=True)
+            time.sleep(delay)
         if not args.json:
             print(f"[{idx + 1}/{len(to_refresh)}] refreshing {name}...", end=" ", flush=True)
         try:
@@ -169,6 +172,10 @@ def cmd_refresh_all(paths: ManagerPaths, args: argparse.Namespace) -> int:
                 timeout_seconds=args.warmup_timeout_seconds,
                 backend=getattr(args, "backend", None),
             )
+            with manager_lock(paths):
+                state = load_state(paths)
+                state["last_background_refresh_at"] = utc_now().isoformat()
+                save_state(paths, state)
             gemini_fam = (
                 (batch_refresh_res.usage_families.get("gemini") or {})
                 if isinstance(batch_refresh_res.usage_families, dict)
@@ -201,6 +208,10 @@ def cmd_refresh_all(paths: ManagerPaths, args: argparse.Namespace) -> int:
                     f"OK [{batch_refresh_res.backend}] (gemini={g_str}, other={o_str}, plan={batch_refresh_res.plan_type or '-'})"
                 )
         except Exception as exc:
+            with manager_lock(paths):
+                state = load_state(paths)
+                state["last_background_refresh_at"] = utc_now().isoformat()
+                save_state(paths, state)
             errors.append({"account": name, "success": False, "error": str(exc)})
             if not args.json:
                 print(f"FAIL: {exc}")

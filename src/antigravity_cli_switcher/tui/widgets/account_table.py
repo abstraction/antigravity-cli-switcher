@@ -15,10 +15,12 @@ from antigravity_cli_switcher.models import (
     AccountVerification,
     HealthStatus,
     ProblemStatus,
+    RefreshQueueItem,
     SnapshotVerification,
     StatusSnapshot,
 )
 from antigravity_cli_switcher.tui.formatters import (
+    compute_refresh_queue,
     format_countdown,
     format_last_error,
     format_model_usage,
@@ -45,7 +47,7 @@ COLUMN_CONFIG: Final[dict[str, tuple[str, int]]] = {
     "gemini": ("Gemini S/W", 10),
     "claude": ("Claude S/W", 10),
     "reset": ("Reset (S/W)", 17),
-    "next": ("Next", 8),
+    "next": ("Next", 10),
     "error": ("Last Error", 10),
 }
 
@@ -151,6 +153,7 @@ class AccountTable(DataTable[Text | str]):
         ver: AccountVerification | None,
         active_name: str | None,
         now: datetime,
+        queue_item: RefreshQueueItem | None = None,
     ) -> tuple[Text, Text, Text, Text, Text, Text, Text, Text, Text, Text, Text]:
         if ver is not None:
             prob_status = ver.problem_status.value
@@ -192,7 +195,12 @@ class AccountTable(DataTable[Text | str]):
             gemini_str = format_colored_model_usage(format_model_usage(meta, "gemini"))
             claude_str = format_colored_model_usage(format_model_usage(meta, "claude"))
             reset_str = Text(format_countdown(meta, now), style="#666666")
-            next_str = Text(format_next_refresh(meta, now), style="#4897d4")
+            next_style = (
+                "bold #cbc06c"
+                if (queue_item and queue_item.position == 1 and queue_item.eta_seconds == 0)
+                else "#4897d4"
+            )
+            next_str = Text(format_next_refresh(meta, now, queue_item=queue_item), style=next_style)
             err_str = Text(format_last_error(meta), style="bold #dc4c4c" if meta.last_error else "dim")
 
         return (
@@ -218,6 +226,12 @@ class AccountTable(DataTable[Text | str]):
         """Update table rows from snapshot and verification data."""
         now = datetime.now(timezone.utc)
         active_name = snapshot.active
+        refresh_queue = compute_refresh_queue(
+            snapshot.accounts,
+            active_name,
+            now,
+            last_background_refresh_at=snapshot.last_background_refresh_at,
+        )
         items = list(snapshot.accounts.items())
 
         if sort_mode == "name":
@@ -264,7 +278,8 @@ class AccountTable(DataTable[Text | str]):
         ):
             for name, meta in items:
                 ver = verification.accounts.get(name)
-                vals = self._row_values(name, meta, ver, active_name, now)
+                q_item = refresh_queue.get(name)
+                vals = self._row_values(name, meta, ver, active_name, now, queue_item=q_item)
                 val_dict = dict(zip(ALL_COL_KEYS, vals, strict=True))
                 for col_key in self._current_col_keys:
                     self.update_cell(name, col_key, val_dict[col_key], update_width=False)
@@ -283,7 +298,8 @@ class AccountTable(DataTable[Text | str]):
                 new_cursor_row = idx
 
             ver = verification.accounts.get(name)
-            vals = self._row_values(name, meta, ver, active_name, now)
+            q_item = refresh_queue.get(name)
+            vals = self._row_values(name, meta, ver, active_name, now, queue_item=q_item)
             val_dict = dict(zip(ALL_COL_KEYS, vals, strict=True))
             row_cells = [val_dict[k] for k in self._current_col_keys]
             self.add_row(*row_cells, key=name)

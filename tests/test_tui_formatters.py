@@ -9,9 +9,10 @@ from unittest.mock import patch
 from antigravity_cli_switcher.manager.paths import build_paths
 from antigravity_cli_switcher.manager.quota import _persist_refresh_failure
 from antigravity_cli_switcher.manager.state import load_state, parse_timestamp, save_state, utc_now
-from antigravity_cli_switcher.models import AccountMeta, ProblemStatus, UsageWindow
+from antigravity_cli_switcher.models import AccountMeta, ProblemStatus, RefreshQueueItem, UsageWindow
 from antigravity_cli_switcher.tui.app import ACSApp
 from antigravity_cli_switcher.tui.formatters import (
+    compute_refresh_queue,
     format_countdown,
     format_model_usage,
     format_natural_duration,
@@ -220,6 +221,74 @@ class TUIFormattersTests(unittest.TestCase):
         self.assertIn("0%", t_claude.plain)
         self.assertIn("in 1d", t_claude.plain)
         self.assertEqual(t_claude.plain[:7], "[     ]")
+
+    def test_compute_refresh_queue_pacing_and_priority(self) -> None:
+        now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        accounts = {
+            "standby_acc_z": AccountMeta(
+                next_live_check_at="2026-01-01T11:00:00+00:00",
+                refresh_policy_seconds=300,
+            ),
+            "standby_acc_a": AccountMeta(
+                next_live_check_at="2026-01-01T11:00:00+00:00",
+                refresh_policy_seconds=300,
+            ),
+            "active_acc": AccountMeta(
+                next_live_check_at="2026-01-01T11:00:00+00:00",
+                refresh_policy_seconds=300,
+            ),
+            "future_acc": AccountMeta(
+                next_live_check_at="2026-01-01T12:30:00+00:00",
+                refresh_policy_seconds=300,
+            ),
+            "disabled_acc": AccountMeta(
+                enabled=False,
+                next_live_check_at="2026-01-01T11:00:00+00:00",
+                refresh_policy_seconds=300,
+            ),
+        }
+        # Last refresh was 15s ago, so 20s cooldown remaining on 35s governor
+        last_bg = "2026-01-01T11:59:45+00:00"
+        queue = compute_refresh_queue(accounts, "active_acc", now, last_background_refresh_at=last_bg)
+
+        self.assertNotIn("future_acc", queue)
+        self.assertNotIn("disabled_acc", queue)
+        # Active is prioritized: position 1, eta = 20s
+        self.assertEqual(queue["active_acc"].position, 1)
+        self.assertEqual(queue["active_acc"].eta_seconds, 20)
+        # Standby sorted alphabetically:
+        # standby_acc_a: position 2, eta = 20 + 35 = 55s
+        self.assertEqual(queue["standby_acc_a"].position, 2)
+        self.assertEqual(queue["standby_acc_a"].eta_seconds, 55)
+        # standby_acc_z: position 3, eta = 20 + 70 = 90s
+        self.assertEqual(queue["standby_acc_z"].position, 3)
+        self.assertEqual(queue["standby_acc_z"].eta_seconds, 90)
+
+    def test_format_next_refresh_queue_transparency(self) -> None:
+        now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        meta_due = AccountMeta(
+            next_live_check_at="2026-01-01T11:00:00+00:00",
+            refresh_policy_seconds=300,
+        )
+        # Position 1, no cooldown -> "due"
+        q1_immediate = RefreshQueueItem(account="acc1", position=1, eta_seconds=0)
+        self.assertEqual(format_next_refresh(meta_due, now, queue_item=q1_immediate), "due")
+
+        # Position 1, 20s cooldown remaining -> "due (20s)"
+        q1_cooldown = RefreshQueueItem(account="acc1", position=1, eta_seconds=20)
+        self.assertEqual(format_next_refresh(meta_due, now, queue_item=q1_cooldown), "due (20s)")
+
+        # Position 2, 35s ETA -> "q:2 (35s)"
+        q2 = RefreshQueueItem(account="acc2", position=2, eta_seconds=35)
+        self.assertEqual(format_next_refresh(meta_due, now, queue_item=q2), "q:2 (35s)")
+
+        # Position 3, 70s ETA -> "q:3 (~1m)"
+        q3 = RefreshQueueItem(account="acc3", position=3, eta_seconds=70)
+        self.assertEqual(format_next_refresh(meta_due, now, queue_item=q3), "q:3 (~1m)")
+
+        # Position 4, 105s ETA -> "q:4 (~2m)"
+        q4 = RefreshQueueItem(account="acc4", position=4, eta_seconds=105)
+        self.assertEqual(format_next_refresh(meta_due, now, queue_item=q4), "q:4 (~2m)")
 
 
 class TUIBackgroundRefreshTests(unittest.TestCase):

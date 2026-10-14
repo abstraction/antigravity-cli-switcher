@@ -226,7 +226,12 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_all = sub.add_parser("refresh-all", help="Refresh usage metrics sequentially for all accounts")
     refresh_all.add_argument("--agy-binary", default=None, help="Explicit agy binary path")
     refresh_all.add_argument("--warmup-timeout-seconds", type=int, default=25, help="Task warmup timeout per account")
-    refresh_all.add_argument("--delay-seconds", type=float, default=2.0, help="Delay between account refreshes")
+    refresh_all.add_argument(
+        "--delay-seconds",
+        type=float,
+        default=35.0,
+        help="Delay between account refreshes (anti-abuse pacing default: 35s)",
+    )
     refresh_all.add_argument("--include", nargs="+", help="Only refresh these specific accounts")
     refresh_all.add_argument("--exclude", nargs="+", help="Skip these accounts")
     refresh_all.add_argument("--skip-disabled", action="store_true", help="Skip disabled accounts")

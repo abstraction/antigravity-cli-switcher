@@ -15,6 +15,7 @@ from antigravity_cli_switcher.models import (
     AccountUtilizationRecord,
     AccountVerification,
     HealthStatus,
+    RefreshQueueItem,
 )
 from antigravity_cli_switcher.tui.formatters import (
     format_natural_duration,
@@ -42,6 +43,7 @@ class DetailPanel(Widget):
         self._last_ver: AccountVerification | None = None
         self._last_util: AccountUtilizationRecord | None = None
         self._last_cooldown_remaining: float = 0.0
+        self._last_queue_item: RefreshQueueItem | None = None
 
     def compose(self) -> ComposeResult:
         yield Static("Overview", id="detail-title")
@@ -55,6 +57,7 @@ class DetailPanel(Widget):
                 self._last_ver,
                 self._last_util,
                 self._last_cooldown_remaining,
+                self._last_queue_item,
             )
 
     def on_resize(self, event: events.Resize) -> None:
@@ -65,6 +68,7 @@ class DetailPanel(Widget):
                 self._last_ver,
                 self._last_util,
                 self._last_cooldown_remaining,
+                self._last_queue_item,
             )
 
     def _render_quota_window(
@@ -109,6 +113,7 @@ class DetailPanel(Widget):
         verification: AccountVerification | None,
         utilization: AccountUtilizationRecord | None = None,
         cooldown_remaining: float = 0.0,
+        queue_item: RefreshQueueItem | None = None,
     ) -> None:
         """Update the panel contents for the given account."""
         self._last_name = name
@@ -116,6 +121,7 @@ class DetailPanel(Widget):
         self._last_ver = verification
         self._last_util = utilization
         self._last_cooldown_remaining = cooldown_remaining
+        self._last_queue_item = queue_item
 
         if not self.is_mounted:
             return
@@ -186,9 +192,11 @@ class DetailPanel(Widget):
         other_5h = self._render_quota_window(meta, "short", now, "other")
         other_wk = self._render_quota_window(meta, "weekly", now, "other")
         if meta.health_status == HealthStatus.INELIGIBLE or meta.stored_health_status == HealthStatus.INELIGIBLE:
-            next_ref = f"{format_next_refresh(meta, now)} (24h)"
+            next_ref = f"{format_next_refresh(meta, now, queue_item=self._last_queue_item)} (24h)"
         else:
-            next_ref = f"{format_next_refresh(meta, now)} ({meta.refresh_policy_seconds}s)"
+            next_ref = (
+                f"{format_next_refresh(meta, now, queue_item=self._last_queue_item)} ({meta.refresh_policy_seconds}s)"
+            )
         mode_str = f"{meta.status} │ {'enabled' if meta.enabled else 'disabled'}"
         status_str = str(meta.health_status.value if hasattr(meta.health_status, "value") else meta.health_status)
 

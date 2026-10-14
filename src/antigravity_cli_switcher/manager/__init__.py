@@ -148,6 +148,7 @@ from antigravity_cli_switcher.manager.routing import (
     resolve_route,
 )
 from antigravity_cli_switcher.manager.state import (
+    BACKGROUND_REFRESH_PACING_SECONDS,
     DEFAULT_REFRESH_POLICY_SECONDS,
     DEFAULT_SWITCH_DEDUPE_SECONDS,
     _default_switch_runtime,
@@ -184,6 +185,7 @@ DEFAULT_SWITCH_STRATEGY = DEFAULT_CANDIDATE_STRATEGY
 DEFAULT_FALLBACK_STRATEGY = DEFAULT_FAMILY_FALLBACK_STRATEGY
 
 __all__ = [
+    "BACKGROUND_REFRESH_PACING_SECONDS",
     "CODE_ASSIST_BASE_URL",
     "CODE_ASSIST_LOAD_PATH",
     "CODE_ASSIST_QUOTA_PATH",
