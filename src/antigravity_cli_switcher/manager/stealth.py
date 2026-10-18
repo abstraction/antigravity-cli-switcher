@@ -306,8 +306,9 @@ def get_agy_quiescence_remaining(
     Checks:
     1. Active agy/antigravity processes (if running, full cooldown is required).
     2. last_process_kill_at timestamp from switch_runtime.
-    3. Log and WAL artifact modification times in live ~/.gemini/antigravity-cli/
-       (cli.log, log/cli-*.log, conversation_summaries.db-wal, history.jsonl).
+    3. Log, WAL, and summary artifact modification times in live ~/.gemini/antigravity-cli/
+       (cli.log, log/cli-*.log, conversation_summaries.db-wal, history.jsonl,
+        jetbox_summaries_proto.pb, agyhub_summaries_proto.pb).
 
     Returns 0.0 if agy has been inactive for >= STEALTH_SWITCH_COOLDOWN_SECONDS (60s).
     """
@@ -391,12 +392,18 @@ def get_agy_quiescence_remaining(
                     latest_mtime = max(latest_mtime, hist.stat().st_mtime)
                 except OSError:
                     pass
-            jetbox_pb = adir / "jetbox_summaries_proto.pb"
-            if jetbox_pb.is_file():
-                try:
-                    latest_mtime = max(latest_mtime, jetbox_pb.stat().st_mtime)
-                except OSError:
-                    pass
+            for pb_name in (
+                "jetbox_summaries_proto.pb",
+                "agyhub_summaries_proto.pb",
+                "jetbox_summaries.pb",
+                "agyhub_summaries.pb",
+            ):
+                pb_file = adir / pb_name
+                if pb_file.is_file():
+                    try:
+                        latest_mtime = max(latest_mtime, pb_file.stat().st_mtime)
+                    except OSError:
+                        pass
             brain_dir = adir / "brain"
             if brain_dir.is_dir():
                 try:

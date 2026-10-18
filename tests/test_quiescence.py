@@ -90,6 +90,29 @@ def test_quiescence_remaining_recent_artifacts(tmp_path: Path) -> None:
     assert 44.0 <= rem <= 46.0
 
 
+def test_quiescence_remaining_summary_protobufs(tmp_path: Path) -> None:
+    live_dir = tmp_path / ".gemini"
+    agy_dir = live_dir / "antigravity-cli"
+    agy_dir.mkdir(parents=True)
+
+    now = time.time()
+    recent_time = now - 20.0
+
+    for pb_name in (
+        "jetbox_summaries_proto.pb",
+        "agyhub_summaries_proto.pb",
+        "jetbox_summaries.pb",
+        "agyhub_summaries.pb",
+    ):
+        pb_file = agy_dir / pb_name
+        pb_file.write_text("proto data", encoding="utf-8")
+        os.utime(pb_file, (recent_time, recent_time))
+
+        rem = get_agy_quiescence_remaining(live_dir=live_dir, now=now)
+        assert 39.0 <= rem <= 41.0
+        pb_file.unlink()
+
+
 def test_switch_account_enforces_quiescence_holding_pattern(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     paths = build_paths(tmp_path / "switcher")
     ensure_layout(paths)
