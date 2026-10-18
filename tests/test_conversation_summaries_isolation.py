@@ -20,6 +20,10 @@ from antigravity_cli_switcher.manager.state import load_state, save_state
 
 def test_managed_profile_files_contains_conversation_summaries() -> None:
     assert "antigravity-cli/conversation_summaries.db" in MANAGED_PROFILE_FILES
+    assert "antigravity-cli/jetbox_summaries_proto.pb" in MANAGED_PROFILE_FILES
+    assert "antigravity-cli/agyhub_summaries_proto.pb" in MANAGED_PROFILE_FILES
+    assert "antigravity-cli/jetbox_summaries.pb" in MANAGED_PROFILE_FILES
+    assert "antigravity-cli/agyhub_summaries.pb" in MANAGED_PROFILE_FILES
 
 
 def test_conversation_summaries_isolated_per_profile(tmp_path: Path) -> None:
@@ -41,21 +45,25 @@ def test_conversation_summaries_isolated_per_profile(tmp_path: Path) -> None:
             'installation_uuid: "11111111-1111-4111-8111-111111111111"\n', encoding="utf-8"
         )
 
-    # Set up conversation_summaries.db for account 1
+    # Set up conversation_summaries.db and protobuf files for account 1
     db1_path = src1 / ".gemini" / "antigravity-cli" / "conversation_summaries.db"
     with sqlite3.connect(str(db1_path)) as con:
         con.execute("CREATE TABLE summaries (id INTEGER PRIMARY KEY, title TEXT)")
         con.execute("INSERT INTO summaries VALUES (1, 'Alpha Conversation')")
         con.commit()
+    (src1 / ".gemini" / "antigravity-cli" / "jetbox_summaries_proto.pb").write_bytes(b"alpha_jetbox_proto")
+    (src1 / ".gemini" / "antigravity-cli" / "agyhub_summaries_proto.pb").write_bytes(b"alpha_agyhub_proto")
 
-    # Set up conversation_summaries.db for account 2
+    # Set up conversation_summaries.db and protobuf files for account 2
     db2_path = src2 / ".gemini" / "antigravity-cli" / "conversation_summaries.db"
     with sqlite3.connect(str(db2_path)) as con:
         con.execute("CREATE TABLE summaries (id INTEGER PRIMARY KEY, title TEXT)")
         con.execute("INSERT INTO summaries VALUES (2, 'Beta Conversation')")
         con.commit()
+    (src2 / ".gemini" / "antigravity-cli" / "jetbox_summaries_proto.pb").write_bytes(b"beta_jetbox_proto")
+    (src2 / ".gemini" / "antigravity-cli" / "agyhub_summaries_proto.pb").write_bytes(b"beta_agyhub_proto")
 
-    # Account 3 has no conversation_summaries.db
+    # Account 3 has no conversation_summaries.db and no protobuf summary files
 
     save_account_profile(paths, "acc1", src1)
     save_account_profile(paths, "acc2", src2)
@@ -67,18 +75,24 @@ def test_conversation_summaries_isolated_per_profile(tmp_path: Path) -> None:
     save_state(paths, state)
 
     live_db = live_dir / "antigravity-cli" / "conversation_summaries.db"
+    live_jetbox_pb = live_dir / "antigravity-cli" / "jetbox_summaries_proto.pb"
+    live_agyhub_pb = live_dir / "antigravity-cli" / "agyhub_summaries_proto.pb"
 
     # Switch to acc1
     switch_account(paths, "acc1", force=True)
     assert live_db.is_file()
+    assert live_jetbox_pb.is_file() and live_jetbox_pb.read_bytes() == b"alpha_jetbox_proto"
+    assert live_agyhub_pb.is_file() and live_agyhub_pb.read_bytes() == b"alpha_agyhub_proto"
     with sqlite3.connect(str(live_db)) as con:
         row = con.execute("SELECT title FROM summaries WHERE id = 1").fetchone()
         assert row is not None
         assert row[0] == "Alpha Conversation"
 
-    # Switch to acc2 -> must swap to acc2's DB
+    # Switch to acc2 -> must swap to acc2's DB and protobuf files
     switch_account(paths, "acc2", force=True)
     assert live_db.is_file()
+    assert live_jetbox_pb.is_file() and live_jetbox_pb.read_bytes() == b"beta_jetbox_proto"
+    assert live_agyhub_pb.is_file() and live_agyhub_pb.read_bytes() == b"beta_agyhub_proto"
     with sqlite3.connect(str(live_db)) as con:
         row = con.execute("SELECT title FROM summaries WHERE id = 2").fetchone()
         assert row is not None
@@ -86,9 +100,11 @@ def test_conversation_summaries_isolated_per_profile(tmp_path: Path) -> None:
         # Acc1 data must not exist in Acc2 DB
         assert con.execute("SELECT title FROM summaries WHERE id = 1").fetchone() is None
 
-    # Switch to acc3 (no summaries db) -> must unlink live DB rather than retaining acc2's DB
+    # Switch to acc3 (no summaries db / protobuf files) -> must unlink live DB and protobuf files
     switch_account(paths, "acc3", force=True)
     assert not live_db.exists()
+    assert not live_jetbox_pb.exists()
+    assert not live_agyhub_pb.exists()
 
 
 def test_wal_checkpoint_truncate_and_sidecar_cleanup(tmp_path: Path) -> None:

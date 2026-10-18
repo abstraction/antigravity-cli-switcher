@@ -16,6 +16,10 @@ MANAGED_PROFILE_FILES = (
     "antigravity-cli/cache/default_project_id.txt",
     "antigravity-cli/cache/projects.json",
     "antigravity-cli/conversation_summaries.db",
+    "antigravity-cli/jetbox_summaries_proto.pb",
+    "antigravity-cli/agyhub_summaries_proto.pb",
+    "antigravity-cli/jetbox_summaries.pb",
+    "antigravity-cli/agyhub_summaries.pb",
 )
 LOGIN_ARTIFACT_SETS = (("antigravity-cli/antigravity-oauth-token",),)
 
